@@ -16,7 +16,3 @@ SSM-Erweiterung, linear vs. log10-Zeit) erstmals öffentlich im März-2026-Threa
 - Datei-Änderungszeiten (mtimes) sind erhalten (rsync -a / cp -p).
 - `TIMESTAMPS.tsv` = pro Datei: mtime, Größe, SHA-256.
 - Entwicklungszeitraum laut mtimes: überwiegend März–April 2026.
-
-Hinweis: Das Git-Commit-/Push-Datum ist der Anlagetag dieses Repos und belegt nur
-„existierte spätestens dann". Prioritätsanker sind die öffentlichen X-Posts (oben)
-und die erhaltenen Datei-mtimes.
