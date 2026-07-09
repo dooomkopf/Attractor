@@ -1,7 +1,8 @@
 # Attractor — BTC Power-Law-Residuen als rekonstruierter Attraktor
 
 Forschungscorpus: Delay-Embedding-/PCA-Rekonstruktion der Bitcoin-Power-Law-Residuen,
-Nambu-/Wang-2-Scroll-Modellierung, SSM-Analyse (SSMLearn/SSMTool).
+Nambu-/Wang-2-Scroll-Modellierung, SSM-Analyse (SSMLearn/SSMTool). Konsequent in
+beiden Zeit-Uhren analysiert: linear (Tage) und log10(Tage).
 
 ## Provenienz / Zeitstempel
 - Datei-Änderungszeiten (mtimes) sind erhalten (rsync -a / cp -p).
@@ -12,7 +13,3 @@ Nambu-/Wang-2-Scroll-Modellierung, SSM-Analyse (SSMLearn/SSMTool).
 Hinweis: Das Git-Commit-/Push-Datum ist der Anlagetag dieses Repos und belegt nur
 „existierte spätestens dann". Prioritätsanker sind der öffentliche X-Thread (31.03.2026)
 und die erhaltenen Datei-mtimes.
-
-## Nicht enthalten
-Fremde Repos (SSMLearn/SSMLearnPy/SSMTool/globalized-SSM — eigenes .git),
-Video-Einzelframes, `__pycache__`, versehentliche PostScript-Dumps (`np`/`plt`/`matplotlib`).
