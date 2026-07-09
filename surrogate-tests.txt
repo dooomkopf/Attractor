@@ -1,0 +1,22 @@
+Ziel: testen, ob der gefunden Bitcoin-Attraktor über die Residuen (zuerst, später auch über die daily n) real ist oder bzw. welche Komponenten stabil sind oder nicht.
+er zeigt in PC1-2 Ebene grob kreisstruktur mit grob 3.5-4 Jahreszyklus
+er zeigt in PC3 Ebene Sattelform (ähnlich Wang 2-Scroll Attraktor)
+
+Fakten: 
+- BTC hat Powerlaw, dieses muss vorher (am besten PL Mean oder PL Bottom) de-trendet werden, sonst keine Struktur (lineare Regression im log-log-Space von Preisdaten, entweder die untere 5% Quantile = PL Bottom oder Median = 50% Quantile)
+- Berechne den Logarithmus der übrig gebliebenen relativen Residuen: log(res) = log ( (p(t) - PL_Bottom)/PL_Bottom ) -> fast immer > 0, nicht immer, evtl hier noch +1 (affine Transformation auf die Klammer im log!, so dass immer > 0
+
+hiervon machen wir TDE (time delay embedding) und PCA
+
+für TDE hat sich durch Optimierung W=1462d, tau=43d und M=35 gefunden. (attractor_scan*.py)
+
+wir haben komplette Attraktoren attractor*.py Dateien, über Preise oder daily n (Ensemble) und einzelne single*.py.
+
+
+Jetzt hat jemand folgende kritische Fragen - wir müssen Surogate testen.... Did you perform any kind of surrogate testing whether IAAFT, shuffling, or fourier first off?I see a few issues here potentially
+
+
+als erstes - erkläre einfach aber genau, wie diese IAFFT; SHUFFLING ODER FOURIER_FIRSTorder sachen gehen
+dann - testen wir kompletten oder lieber einzelnen zyklus oder beides?
+
+Test-Code immer mit Codex in Kooperation entwickeln, iterieren, ich müsst Euch einig sein, du berichtest an mich, im Zweifel entscheide ich oder du.

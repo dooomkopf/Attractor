@@ -1,0 +1,105 @@
+VERGLEICH: WANG 2-SCROLL DGL vs BTC-LPPL DGL — SSM-ANALYSE
+=============================================================
+Stand: 2026-04-12
+Nur analytischer Pfad (ODE-basiert). Keine Daten-Fits.
+
+================================================================================
+1. SYSTEM-EIGENSCHAFTEN
+================================================================================
+
+                            Wang 2-Scroll           BTC-LPPL (M=1 Approx)
+                            ─────────────           ──────────────────────
+ODE-Typ                     3D first-order          3D first-order
+NL-Grad                     2 (quadratisch)         3 (quadratisch + y1^3)
+z-Antrieb                   x*y (bilinear)          Z_E*y1*y2 (Z_E=2.0)
+Kreuz-Kopplung              -y*z, +x*z              -Z_A*y2*z, +Z_B*y1*z
+Zusaetzliche NL             keine                   -gamma*y1^3 (kubisch)
+M-Exponent                  n/a                     1.0 (Original 1.071, irrelevant)
+Dissipativ?                 ja (div=-7.9)           ja (trace=-0.0044)
+Autonom?                    ja                      ja (M=1 Approx)
+
+================================================================================
+2. GLEICHGEWICHTE
+================================================================================
+
+                            Wang                    LPPL
+                            ─────                   ────
+Anzahl                      5 (S1-S5)               3 (E1-E3)
+Relevante Foki              S4, S5                  E2, E3
+Typ                         saddle_focus (INSTABIL)  stable_focus (STABIL)
+sigma_out                   -6, -6                  +22, +24
+|sigma_out|                 6                       22-24
+Resonanzen (Ord 2-4)        keine                   keine
+SSMTool V1.0                BLOCKED                 BLOCKED
+SSMTool V2.6                OPEN                    OPEN
+
+================================================================================
+3. SPEKTRALANALYSE (am relevanten Fixpunkt)
+================================================================================
+
+                            Wang S4                 LPPL E2             LPPL E3
+                            ───────                 ───────             ───────
+Master Re                   +1.64 (INSTABIL)        -1.81e-4 (stabil)  -1.69e-4 (stabil)
+Master Im                   +/- 7.46                +/- 4.88e-4        +/- 5.15e-4
+T_master (linearisiert)     0.84                    35.2y               33.4y
+Slave-Eigenwert             -11.19 (reell)          -4.08e-3 (reell)   -4.10e-3 (reell)
+sigma_out                   -6                      +22                 +24
+Orthonormalitaet W^H V      2e-16                   9e-16               1e-14
+
+================================================================================
+4. COHOMOLOGISCHE GLEICHUNG ORD. 2 (KERNBEWEIS)
+================================================================================
+
+                            Wang S4                 LPPL E2             LPPL E3
+                            ───────                 ───────             ───────
+R2 (red. Dynamik)           = 0                     = 0                 = 0
+W2(2w) Komp. 1 (x/y1)      2.77e-02                3.09e+01            2.44e+01
+W2(2w) Komp. 2 (y/y2)      1.31e-02                3.48e-02            2.84e-02
+W2(2w) Komp. 3 (z/z)       1.42e-02                2.60e-01            2.28e-01
+Staerkster 2w-Kanal         Komp. 1                 Komp. 1             Komp. 1
+W2(DC) Komp. 1              klein                   1.79e+02            1.44e+02
+cond(C_k) bei (2,0)         3.1                     1.2e+06             1.1e+06
+Resonanzen                  keine                   keine               keine
+
+================================================================================
+5. BACKBONE
+================================================================================
+
+                            Wang S4                 LPPL E2
+                            ───────                 ───────
+alpha_0                     +1.64 (wachsend)        -1.81e-4 (zerfallend)
+omega_0                     7.46 rad/t              4.88e-4 rad/d
+Backbone                    FLACH                   FLACH
+gamma_1                     0 (bei Ord. 2)          0 (bei Ord. 2)
+Naechste Korrektur          Ord. 3 (F2 o W2)       Ord. 3 (gamma*y1^3 + F2 o W2)
+
+================================================================================
+6. ZUSAMMENFASSUNG DER GEMEINSAMKEITEN
+================================================================================
+
+- R2 = 0 in BEIDEN Systemen -> 2w nicht in der reduzierten Dynamik
+- W2 != 0 in BEIDEN Systemen -> 2w entsteht durch SSM-Kruemmung
+- Backbone flach bei Ord. 2 in BEIDEN
+- Keine Resonanzen in BEIDEN
+- z-Antrieb durch bilineares y1*y2 (bzw x*y) in BEIDEN
+- Kreuz-Kopplung -y2*z/+y1*z (bzw -y*z/+x*z) in BEIDEN
+
+================================================================================
+7. UNTERSCHIEDE
+================================================================================
+
+- Wang: instabile Foki -> chaotischer 2-scroll Attraktor
+  LPPL: stabile Foki -> konvergente Spirale (kein Chaos)
+- Wang: rein quadratisch (Grad 2)
+  LPPL: quadratisch + kubisch y1^3 (Grad 3)
+- Wang: sigma_out negativ (Master waechst, Slave zerfaellt)
+  LPPL: sigma_out positiv, klassisch (beide zerfallen, Slave schneller)
+- Wang: |sigma_out| = 6
+  LPPL: |sigma_out| = 22-24 (deutlich groesserer Gap)
+- Wang: linearisierte Periode realistisch (T=0.84, Attraktor T~0.21)
+  LPPL: linearisierte Periode T=35y (beobachtet ~4y, Diskrepanz durch
+        schwache kubische Rueckstellkraft am Gleichgewicht)
+- Wang: |W2| ~ O(0.01)
+  LPPL: |W2| ~ O(10-100) (viel staerkere Mannigfaltigkeits-Kruemmung)
+
+================================================================================

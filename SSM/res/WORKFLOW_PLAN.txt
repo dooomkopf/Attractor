@@ -1,0 +1,120 @@
+SSM/res/ NEUER WORKFLOW — Konsens Claude + Codex
+====================================================
+Stand: 2026-04-12
+
+Prinzip: Jeder Schritt beantwortet EINE Frage.
+Jeder Schritt ist eine eigene CLI (01_cli_...py).
+Core-Module (data, embedding, geometry, phase) bleiben als Helfer,
+werden aber nicht direkt aufgerufen — nur ueber die CLIs.
+Kein Surrogaten-Test. Kein "Daten laden" als eigener Schritt.
+
+====================================================
+WORKFLOW (9 Schritte)
+====================================================
+
+01_cli_precheck.py
+  FRAGE: Sind Daten und Embedding sinnvoll? Was liefert der Basis-SSM-Fit?
+  WAS:   BTC-Residuen laden, M=35 Delay-Embedding, PCA-Budget,
+         SSMLearn-Fit (ssm_dim, poly_degree), Eigenwerte,
+         fit_err, ode_err, Resonanz, Spektralgap, 2:1-Kandidat
+  PLOT:  keiner (reiner Text, wie analyze_residuals/01)
+  INPUT: ziel.csv + Hyperparameter
+  OUTPUT: FIXED/LEARNED Tabelle, Scan-Modus (--scan_ssm_dim, --scan_poly)
+
+02_cli_embedding.py
+  FRAGE: Wie sieht die PCA-Struktur aus? Wo liegt der Varianzschnitt?
+  WAS:   Scree-Plot (Varianzanteile), Mode-Plots (PCA-Eigenvektoren),
+         kumulative Varianz, empfohlener ssm_dim-Bereich
+  PLOT:  2-Panel: Scree + kumulative Varianz | Mode-Shapes (Vt-Zeilen)
+
+03_cli_intrinsic_dim.py
+  FRAGE: Ist die Datenwolke wirklich niedrig-dimensional?
+  WAS:   TWO-NN Dimensionsschaetzung, lokale PCA pro Punkt,
+         Histogramm der lokalen Dimensionen
+  PLOT:  2-Panel: TWO-NN Ergebnis | Histogramm lokale Dim
+
+04_cli_manifold.py
+  FRAGE: Passt ein polynomialer Decoder W(PC1,PC2) -> PC3..?
+  WAS:   Globaler Polynom-Fit PC3..PC_k = W(PC1, PC2),
+         R^2 pro Komponente, 3D-Mannigfaltigkeits-Plot
+  PLOT:  3D-Plot: Trajektorie + gefittete Flaeche (Cycle-Colors)
+
+05_cli_linear_screen.py
+  FRAGE: Gibt es Resonanzen oder Spektralgap-Probleme?
+  WAS:   Master/Slave-Split aus gefitteten Eigenwerten,
+         sigma_in/sigma_out, 2:1-Detuning, near inner/outer resonances
+         (Codex-Vorschlag: resonance + spectral_gap zusammen)
+  PLOT:  keiner (Text, wie Jain choose_E + resonance_analysis)
+
+06_cli_harmonics.py
+  FRAGE: Welche PCs tragen welche Frequenzen (omega, 2omega, ...)?
+  WAS:   PSD pro PC (Welch), dominante Frequenz + 2omega-Marker,
+         PSD-Ratio 2omega/omega. Optional: phasenbasierte Fourier-
+         Zerlegung PC_j(theta) statt reiner Zeit-PSD
+         (Codex-Vorschlag: phasenbasiert primaer, PSD als Backup)
+  PLOT:  2x3 Grid: PSD pro PC (wie Wang 02_cli_harmonics)
+
+07_cli_backbone.py
+  FRAGE: Ist die Frequenz amplitudenabhaengig?
+  WAS:   Reduzierte Dynamik in Polarform: rho_dot = alpha(rho)*rho,
+         theta_dot = omega(rho). Backbone-Kurve omega vs rho.
+         Bei R2=0 (wie Wang/LPPL): flach.
+         Bei R2!=0 oder Ord.3: gekruemmt.
+  PLOT:  2-Panel: omega(rho) | alpha(rho)
+
+08_cli_phase_lock.py
+  FRAGE: Ist die Sub-Mode phasenstarr an die Hauptmode gekoppelt?
+  WAS:   psi = 2*phi_main - phi_sub, Resultante R,
+         Drift-Rate vs Erwartung, mean/median delta-phi
+  PLOT:  4-Panel: Envelopes | Wrapped Phases | Delta-phi(t) | Polar-Histogramm
+
+09_cli_slave_test.py
+  FRAGE: Ist PC3+ ein polynomialer Slave von PC1/PC2?
+  WAS:   R^2 pro Slave-PC aus Polynom-Decoder,
+         SLAVED / PARTIAL / INDEPENDENT Verdict,
+         Vergleich mit Wang-Referenz (0.978)
+  PLOT:  1 Reihe: [3D traj vs decoder] [PC3 scatter] [PC4 scatter] ... [Phase portrait]
+
+====================================================
+CORE-MODULE (keine CLIs, werden importiert)
+====================================================
+
+data.py          — BTC-Residuen laden, QuantReg-Detrending
+embedding.py     — Delay-Embedding, PCA, Smoothing
+geometry.py      — Polynom-Decoder-Fit, Mannigfaltigkeits-Auswertung
+phase.py         — Intrinsische Phase aus Master-Koordinaten
+intrinsic_dim.py — TWO-NN, lokale PCA
+local_pca.py     — Lokale PCA-Helfer
+
+====================================================
+ALT -> NEU MAPPING
+====================================================
+
+ALT                          NEU
+SSM_res_data.py           -> data.py (Core)
+SSM_res_embedding.py      -> embedding.py (Core)
+SSM_res_geometry.py       -> geometry.py (Core)
+SSM_res_phase.py          -> phase.py (Core)
+SSM_res_intrinsic_dim.py  -> intrinsic_dim.py (Core)
+SSM_res_local_pca.py      -> local_pca.py (Core)
+SSM_res.py                -> entfaellt (ersetzt durch 01-09 Kette)
+SSM_res_free.py           -> entfaellt (integriert in 03 + 04)
+SSM_res_plots_input.py    -> integriert in 01
+SSM_res_plots_modes.py    -> integriert in 02
+SSM_res_plots_manifold.py -> integriert in 04
+SSM_res_plots_free.py     -> entfaellt
+SSM_res_surrogate_*.py    -> entfaellt
+surrogate_ssm.py          -> entfaellt
+
+====================================================
+VERGLEICH MIT ANDEREN WORKFLOWS
+====================================================
+
+Wang (analyze_wang/):      01-05 Signal | 06-09 SSM analytisch | 10 SSMLearn
+BTC  (analyze_residuals/): 01 Daten | 02-05 Signal | 06-09 LPPL analytisch | 10 SSMLearn
+SSM/res/ (NEU):            01 Precheck | 02-03 Embedding/Dim | 04-05 Manifold/Screen | 06-08 Diagnostik | 09 Slave-Test
+
+Kein analytischer LPPL-Pfad hier — der lebt in analyze_residuals/06-09.
+SSM/res/ ist REIN DATENGETRIEBEN (SSMLearn-Pfad).
+
+====================================================

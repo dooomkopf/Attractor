@@ -1,0 +1,132 @@
+Warum ist das für BTC und deinen Attraktor wichtig?
+Weil dein Einwand gegen triviale Artefakte lautet:
+
+Trend entfernen
+
+Restsignal einbetten
+
+dann erscheint robuste Geometrie
+
+Ein Gutachter wird sofort sagen:
+
+Vielleicht reicht schon ein lineares Signal mit gleichem Spektrum und gleicher Verteilung, um im Delay-Embedding solche Schleifen zu produzieren.
+
+IAAFT testet genau das.
+
+Wenn der Attraktor unter IAAFT verschwindet oder deutlich schwächer wird, ist das gut für deine These.
+Wenn er unter IAAFT fast gleich stark bleibt, wird es problematisch.
+
+Was du konkret mit IAAFT testen solltest
+Nicht nur Bilder anschauen.
+Für jedes IAAFT-Surrogat dieselbe Pipeline wie beim Original:
+
+detrendetes Signal nehmen
+
+Delay-Embedding mit denselben Parametern
+
+PCA
+
+Phase 
+𝜃
+θ, unwrapped phase
+
+Kennzahlen berechnen
+
+Zum Beispiel:
+
+Halving-Phasenkonzentration
+
+Equidistance-Fehler 
+𝜎
+σ
+
+PC2/PC1-Kreisförmigkeit
+
+Linearität von 
+𝜃
+uw
+(
+𝑡
+)
+θ 
+uw
+​
+ (t)
+
+Unterschied linear 
+𝑡
+t vs. 
+log
+⁡
+𝑡
+logt
+
+Dann vergleichst du Original gegen Verteilung der IAAFT-Surrogate.
+
+Interpretation
+Fall A: Original deutlich extremer als IAAFT-Surrogate
+Sehr gut.
+Dann spricht das dafür, dass dein Befund nicht bloß aus Verteilung + Spektrum kommt.
+
+Fall B: Original liegt mitten im IAAFT-Ensemble
+Schlecht.
+Dann ist dein Attraktor womöglich nur ein generischer Effekt linearer Struktur.
+
+Fall C: Manche Kennzahlen signifikant, andere nicht
+Realistisch.
+Dann musst du präzise sagen, welcher Teil deiner These robust ist und welcher nicht.
+
+Was IAAFT nicht testet
+IAAFT ist stark, aber nicht alles.
+
+Es testet nicht speziell gegen:
+
+blockweise Regimewechsel
+
+exogene Halving-Ankopplung
+
+4-Jahres-Modulation mit colored noise
+
+speziell konstruierte LPPL-Nullmodelle
+
+Deshalb ist IAAFT ein zentraler, aber nicht der einzige Nulltest.
+
+Für deine Arbeit die richtige Anwendung
+IAAFT solltest du auf dem Signal anwenden, das tatsächlich eingebettet wird, also zum Beispiel auf:
+
+log
+⁡
+(
+BTC
+/
+Powerlaw-Baseline
+)
+log(BTC/Powerlaw-Baseline)
+
+alternativ auf 
+𝑛
+ens
+(
+𝑡
+)
+n 
+ens
+​
+ (t)
+
+Nicht auf dem Rohpreis.
+
+Denn deine Hypothese betrifft die Dynamik nach Detrending.
+
+In einem Satz
+IAAFT erzeugt künstliche Zeitreihen mit derselben Verteilung und fast demselben Spektrum wie dein Original, aber ohne dessen originale nichtlineare Phasenstruktur; genau deshalb ist es der wichtigste Standard-Surrogattest für deine Attraktor-These.
+
+Als nächstes würde ich dir ein konkretes IAAFT-Testprotokoll für dein BTC-Projekt formulieren: Eingangssignal, 4 Kennzahlen, 1000 Surrogate, p-Wert-Auswertung.
+
+￼
+￼
+￼
+￼
+￼
+￼
+
