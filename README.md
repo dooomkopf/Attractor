@@ -4,7 +4,7 @@ Forschungscorpus: Delay-Embedding-/PCA-Rekonstruktion der Bitcoin-Power-Law-Resi
 Nambu-/Wang-2-Scroll-Modellierung, SSM-Analyse (SSMLearn/SSMTool). Konsequent in
 beiden Zeit-Uhren analysiert: linear (Tage) und log10(Tage).
 
-## Sources (öffentliche Prioritäts-Posts, @Hendrik__Z auf X)
+## Sources (@Hendrik__Z on X)
 - https://x.com/Hendrik__Z/status/2049813328206102737
 - https://x.com/Hendrik__Z/status/2041199588657262985
 - https://x.com/Hendrik__Z/status/2038965909528641982
