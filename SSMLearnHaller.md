@@ -1,17 +1,50 @@
-# SSMLearn — Vollständiger Workflow (Haller / Cenedese / Axås)
+> Zusammengeführt aus SSMLearnHaller.md + SSMLearnHaller_new.md (Stand 11.07.2026)
 
-Quelle: `/home/hz/Data/Attractor/SSMLearn/` (Stand: vor-Geklont von `haller-group/SSMLearn`).
-Diese Datei ist ein vollständiges Spezifikations-Kochbuch für eine Python-Reimplementation. Sie folgt der echten Code-Struktur, nicht der Marketing-Sprache des README. Originalkommentare aus dem Code werden wörtlich als Blockzitate übernommen.
+# SSMLearn — Datengetriebene SSM-Identifikation (Haller / Cenedese / Axås): Workflow, Mathematik, lokale Einordnung
 
-Zentrale Referenzen (PDFs liegen im Parent-Verzeichnis `/home/hz/Data/Attractor/`):
+Quellen:
+- MATLAB-Repo: `/home/hz/Data/Attractor/SSMLearn/` (geklont von `haller-group/SSMLearn`)
+- Python-Implementierung: `/home/hz/Data/Attractor/SSMLearnPy/` (Cenedese, `SSMLearnPy`)
+- Modellbasierte Gegenfamilie: `/home/hz/Data/Attractor/SSMtool/` (V1.0) und `/home/hz/Data/Attractor/SSMTool_jain/` (SSMTool 2.6) — Doku: `/home/hz/Data/Attractor/SSMToolHaller_merged.md`
+- Globalisierung lokaler SSM-Darstellungen: `/home/hz/Data/Attractor/globalized-SSM/`
+
+Zentrale Referenzen (PDFs im Verzeichnis `/home/hz/Data/Attractor/`):
 - `Haller_Ponsioen2016_NNM_SSM_arxiv.pdf` — Existenzsatz für SSMs.
 - Cenedese, Axås, Bäuerlein, Avila, Haller, *Nat. Commun.* 13 (2022) 872 — SSMLearn-Paper.
 - Axås, Cenedese, Haller, *Nonlinear Dyn.* 111 (2023) 7941 — fastSSM.
 - Axås, Haller, *Nonlinear Dyn.* 111 (2023) 22079 — Delay-Embedded SSMs.
 - Liu, Axås, Haller, *Chaos* 34 (2024) 033140 — Inertial Manifolds als SSMs (chaotische Dynamik).
-- Kaszás, Haller, *Globalizing manifold-based reduced models for equations and data* (submitted, 2025) — Rational/Padé-Fortsetzung lokaler SSM-Darstellungen über die Taylor-Umgebung hinaus; Repo jetzt lokal in `/home/hz/Data/Attractor/globalized-SSM/`.
+- Kaszás, Haller, *Globalizing manifold-based reduced models for equations and data* (submitted, 2025) — Rational/Padé-Fortsetzung lokaler SSM-Darstellungen über die Taylor-Umgebung hinaus.
 
 ---
+
+## Inhaltsverzeichnis
+
+**Teil I — Grundlagen und Einordnung**
+1. Was ist eine Spectral Submanifold (SSM)
+2. Repo-Landschaft und Abgrenzung (SSMLearn / SSMLearnPy / SSMtool / SSMTool 2.6 / globalized-SSM)
+
+**Teil II — SSMLearn (MATLAB-Referenz)**
+3. Datenformat und Annahmen
+4. Pipeline-Übersicht
+5. Datei-Inventur unter `src/`
+6. End-to-End-Workflow als Schrittliste
+7. Zentrale Mathematik
+8. Outputs
+9. Beispiele
+10. Kritische Limitationen
+
+**Teil III — Python und Anwendung**
+11. Python: SSMLearnPy und Portierungs-Referenz
+12. Anwendbarkeit auf BTC-log-Residuen
+13. Quellen-Index (Datei → Zweck)
+
+**Anhang**
+- A. Aufgelöste Widersprüche
+
+---
+
+# Teil I — Grundlagen und Einordnung
 
 ## 1. Was ist eine Spectral Submanifold (SSM)?
 
@@ -38,62 +71,109 @@ Eine SSM existiert eindeutig glatt (bis auf endliche Differenzierbarkeitsordnung
 
 3. **Non-Resonanz-Bedingung (algebraisch, Ordnung für Ordnung):**
    $$\lambda_o \;\neq\; \sum_{e\in E} m_e\,\lambda_e \qquad \forall\,o\notin E,\;\forall\,m\in \mathbb{N}^d \text{ mit } 2 \le \sum_e m_e \le \sigma(E).$$
-   Verletzungen dieser Bedingung erzeugen "small denominators" in der Cohomological Equation (siehe §6) und damit Singularitäten in der Parametrisierung. SSMLearn detektiert diese in `IMDynamicsFlow.m` über `tol_nf` (siehe §7.4).
-
-### 1.3 Was unterscheidet SSMLearn von SSMtool?
-
-- **SSMtool** (Jain, Haller et al., separates Repo `SSMtool-2.4` und im Parent als `/home/hz/Data/Attractor/SSMtool/`) löst die Invarianz-Gleichung **analytisch** aus den **bekannten** Tensoren $M, C, K, f_{nl}$ eines mechanischen Systems. Es ist ein Forward-Modell.
-- **SSMLearn** rekonstruiert die SSM-Parametrisierung und die reduzierte Dynamik **rein aus Trajektorien-Daten** – die zugrundeliegenden Gleichungen müssen weder bekannt sein noch existieren als analytisches Modell. Es ist ein Inverse-Problem-Solver. Für die Identifikation reicht: Trajektorien (cell array), SSM-Dimension $d$, Polynom-Ordnungen $M$ (für die Parametrisierung) und $M_R$ (für die reduzierte Dynamik).
-- Für Vergleichszwecke ruft SSMLearn aber SSMtool auf, falls verfügbar — siehe `src/utils/getSSM.m:24-30`, `getSSMIC.m`, `SSMToolFRC.m`.
-
-### 1.4 Wo `globalized-SSM` in diese Landschaft gehört
-
-- `globalized-SSM` ist **kein Ersatz** für SSMLearn oder SSMtool, sondern ein **nachgelagerter Approximation-Layer**.
-- Input-seitig setzt es typischerweise eine schon vorhandene **lokale** SSM-Darstellung voraus:
-  - entweder Taylor-Koeffizienten aus `SSMtool`,
-  - oder datengetriebene lokale Fits aus `SSMLearn`.
-- Die Kernidee ist, die nur lokal gültige polynomiale Darstellung durch **rationale Approximationen** zu erweitern, konkret über **Padé-Approximationen** und **rationale Regression**.
-- Praktisch heißt das: SSMLearn liefert die lokale Geometrie und reduzierte Dynamik aus Daten; `globalized-SSM` kann diese Darstellung danach oft auf einen größeren Zustandsbereich extrapolierbar machen, insbesondere wenn reine Taylor-Polynome außerhalb der Fixpunkt-Umgebung schnell instabil oder ungenau werden.
-- Für eine Python-Reimplementation ist das wichtig, weil man damit die Pipeline sauber in zwei Schichten aufteilen kann:
-  1. lokale SSM-Identifikation,
-  2. optionale Globalisierung der bereits identifizierten lokalen Karten und reduzierten Dynamiken.
+   Verletzungen dieser Bedingung erzeugen "small denominators" in der Cohomological Equation (siehe §7) und damit Singularitäten in der Parametrisierung. SSMLearn detektiert diese in `IMDynamicsFlow.m` über `tol_nf` (siehe §5.4.1 und §10.9).
 
 ---
 
-## 2. Datenformat (Inputs)
+## 2. Repo-Landschaft und Abgrenzung
 
-### 2.1 Pflicht-Format `xData` / `yData`
+### 2.1 Übersicht (Pfade auf Platte verifiziert)
+
+| Familie | Lokal |
+|---|---|
+| klassische modellbasierte SSM-Toolbox (V1.0) | `/home/hz/Data/Attractor/SSMtool/` |
+| neue modellbasierte SSM-Toolbox (SSMTool 2.6) | `/home/hz/Data/Attractor/SSMTool_jain/` |
+| datengetriebene SSM-Familie (MATLAB-Referenz) | `/home/hz/Data/Attractor/SSMLearn/` |
+| datengetriebene SSM-Familie (Python) | `/home/hz/Data/Attractor/SSMLearnPy/` |
+| Globalisierung lokaler SSM-Darstellungen (Padé) | `/home/hz/Data/Attractor/globalized-SSM/` |
+| BTC-spezifischer Datenworkflow | `/home/hz/Data/Attractor/analyze_residuals/`, später `analyze_n_ens/` |
+
+Es gibt **kein "neues SSMLearn-Repo"**: `SSMTool_jain` ist trotz neuer Fähigkeiten kein SSMLearn-Nachfolger (Begründung in §2.3). Die datengetriebene Referenz bleibt SSMLearn (MATLAB) bzw. SSMLearnPy (Python); diese Datei bleibt die Grundreferenz für datengetriebene Workflows, `SSMToolHaller_merged.md` die Modellseite.
+
+### 2.2 SSMLearn vs. SSMtool (datengetrieben vs. modellbasiert)
+
+- **SSMtool / SSMTool 2.6** (Jain, Haller et al.) löst die Invarianz-Gleichung **analytisch** aus den **bekannten** Tensoren $M, C, K, f_{nl}$ eines mechanischen Systems. Es ist ein Forward-Modell.
+- **SSMLearn** rekonstruiert die SSM-Parametrisierung und die reduzierte Dynamik **rein aus Trajektorien-Daten** — die zugrundeliegenden Gleichungen müssen weder bekannt sein noch als analytisches Modell existieren. Es ist ein Inverse-Problem-Solver. Für die Identifikation reicht: Trajektorien (cell array), SSM-Dimension $d$, Polynom-Ordnungen $M$ (für die Parametrisierung) und $M_R$ (für die reduzierte Dynamik).
+- Für Vergleichszwecke ruft SSMLearn aber SSMtool auf, falls verfügbar — siehe `src/utils/getSSM.m:24-30`, `getSSMIC.m`, `SSMToolFRC.m`.
+
+### 2.3 Warum SSMTool 2.6 (`SSMTool_jain`) kein SSMLearn-Nachfolger ist
+
+`SSMTool_jain` bleibt architektonisch fundamental anders als SSMLearn:
+- es baut ein `DynamicalSystem`-Objekt auf einem **bekannten Modell** auf,
+- es startet von der Spektralanalyse der Linearisierung,
+- es löst cohomologische Gleichungen auf Modellniveau,
+- es arbeitet mit der Parametrization Method, nicht mit Manifold Learning auf Daten.
+
+Zentrale Klassen:
+- `/home/hz/Data/Attractor/SSMTool_jain/src/@DynamicalSystem/DynamicalSystem.m`
+- `/home/hz/Data/Attractor/SSMTool_jain/src/@Manifold/Manifold.m`
+- `/home/hz/Data/Attractor/SSMTool_jain/src/@SSM/SSM.m`
+
+**"non-intrusive" ≠ "data-driven":** Das 2.6-README spricht von "data-free non-intrusive model reduction". Gemeint ist: man gibt keine expliziten Polynomtensoren vor, hat aber weiterhin ein **modellbasiertes** System bzw. eine auswertbare Nichtlinearität/FE-Blackbox, aus der die SSM-Koeffizienten modellbasiert berechnet werden. Belege:
+- `/home/hz/Data/Attractor/SSMTool_jain/src/@Manifold/private/fnl_nonIntrusive.m`
+- `/home/hz/Data/Attractor/SSMTool_jain/src/@Manifold/private/dfnl_nonIntrusive.m`
+
+Das ist **nicht** der SSMLearn-Weg (Daten → PCA/Embedding → Decoder/Encoder → Regression).
+
+### 2.4 Aus `SSMTool_jain` übernehmbare Ideen für SSMLearn-artige Workflows
+
+Keine direkte Pipeline-Übernahme, aber methodisch nützlich:
+
+1. **Vorprüfungen:** Spektrum prüfen, interne Resonanzen prüfen, Invarianzfehler / Gültigkeitsbereich mitdenken. Hilfreiche Funktionen:
+   - `/home/hz/Data/Attractor/SSMTool_jain/src/@Manifold/compute_auto_invariance_error.m`
+   - `/home/hz/Data/Attractor/SSMTool_jain/src/@Manifold/compute_analyticity_domain.m`
+   - `/home/hz/Data/Attractor/SSMTool_jain/src/@SSM/private/detect_resonant_modes.m`
+2. **Resonanzorientierter Workflow** (für die `harmonic*`-Arbeit relevant): Resonanz nicht nur visuell behaupten, Mastermoden explizit auswählen, interne Resonanzbeziehungen systematisch prüfen.
+3. **Saubere Trennung autonom / nichtautonom:** autonomer Teil `compute_whisker`, nichtautonomer Teil `compute_perturbed_whisker`. Für BTC-/Residuenarbeit heißt das nicht "nutze SSMTool direkt", sondern: Workflow sauberer strukturieren — freie Dynamik, erzwungene Beiträge und Beobachtungsmodell klar trennen.
+
+### 2.5 `globalized-SSM` als nachgelagerter Layer
+
+- `globalized-SSM` ist **kein Ersatz** für SSMLearn oder SSMtool, sondern ein **nachgelagerter Approximation-Layer**.
+- Input-seitig setzt es typischerweise eine schon vorhandene **lokale** SSM-Darstellung voraus: entweder Taylor-Koeffizienten aus `SSMtool` oder datengetriebene lokale Fits aus `SSMLearn`.
+- Kernidee: die nur lokal gültige polynomiale Darstellung durch **rationale Approximationen** erweitern, konkret über **Padé-Approximationen** und **rationale Regression**.
+- Praktisch: SSMLearn liefert die lokale Geometrie und reduzierte Dynamik aus Daten; `globalized-SSM` kann diese Darstellung danach oft auf einen größeren Zustandsbereich extrapolierbar machen, insbesondere wenn reine Taylor-Polynome außerhalb der Fixpunkt-Umgebung schnell instabil oder ungenau werden.
+- Für eine Python-Implementierung heißt das: Pipeline sauber in zwei Schichten aufteilen — (1) lokale SSM-Identifikation, (2) optionale Globalisierung der bereits identifizierten lokalen Karten und reduzierten Dynamiken.
+
+---
+
+# Teil II — SSMLearn (MATLAB-Referenz)
+
+Diese Referenz folgt der echten Code-Struktur, nicht der Marketing-Sprache des README. Originalkommentare aus dem Code werden wörtlich als Blockzitate übernommen.
+
+## 3. Datenformat und Annahmen (Inputs)
+
+### 3.1 Pflicht-Format `xData` / `yData`
 
 Cell-Array der Dimension `{nTraj, 2}`:
 - Spalte 1: Zeitvektor `1 x mi` pro Trajektorie.
 - Spalte 2: Zustand-/Beobachter-Matrix `n x mi` pro Trajektorie.
 
-Sample-Rate wird als konstant angenommen (siehe IMDynamicsMap.m, Zeile 104):
+Sample-Rate wird als konstant angenommen:
 
 > "Sampling time is assumed to be constant"
 > — `src/reduceddynamics/IMDynamicsMap.m:41-42`
 
 Das gilt auch für `IMDynamicsFlow.m:43-44`. Es existiert kein Code, der ungleichmäßiges Sampling rebinned — der User muss vor SSMLearn auf ein Gitter resamplen.
 
-### 2.2 Annahmen
+### 3.2 Annahmen
 
 - **Autonomie**: das zugrundeliegende System ist ungezwungen oder der zwingende Anteil wird separat behandelt (`forcedSSMROM.m`).
-- **Fixpunkt im Ursprung**: das ist in `IMGeometryGraphT0.m` Zeile 8 hardgecodet:
+- **Fixpunkt im Ursprung**: hardgecodet in `IMGeometryGraphT0.m`:
 
   > "Construct the parametrization for an invariant manifold related to a fixed point (assumed to be the origin) as a graph the coordinates y = V_e'*x"
   > — `src/geometry/IMGeometryGraphT0.m:2-5`
 
-  Daten müssen vorher zentriert werden falls der Fixpunkt $\neq 0$ ist. Bei nicht-trivialen Fixpunkten siehe `IMGeometryParaCon.m:11-19` (Parameterabhängige Variante).
+  Daten müssen vorher zentriert werden falls der Fixpunkt $\neq 0$ ist. Bei nicht-trivialen Fixpunkten siehe `IMGeometryParaCon.m:11-19` (parameterabhängige Variante).
 
 - **Beobachterraum** kann der volle Phasenraum oder ein Vektor generischer Observable sein.
 
-### 2.3 Mehrere Trajektorien
+### 3.3 Mehrere Trajektorien
 
 `nTraj > 1` ist normaler Fall. Keine Anforderung an Anzahl. Empirische Beispiele: 1–8 Trajektorien (Couette: 1 Trainings + 7 Test; Sloshing: 3; Brake-Reuss: 1).
 
 ---
 
-## 3. Pipeline-Übersicht (drei Hauptstufen)
+## 4. Pipeline-Übersicht (drei Hauptstufen)
 
 Aus dem README zitiert (`README.md:12-16`):
 
@@ -111,17 +191,17 @@ In Code-Funktionen ausgedrückt:
 | 3. Reduzierte Dynamik + Normal Form | `IMDynamicsFlow` (kontinuierlich) / `IMDynamicsMap` (diskret) / `IMDynamicsMech` (mechanisch) → `dynamicsCoordChangeNF` | `src/reduceddynamics/*.m` |
 | 4. Post-Processing (BBC, FRC) | `backboneCurves`, `computeFRC`, `analyticalFRC`, `forcedSSMROM` | `src/postprocessing/*.m`, `src/timedependentmanifold/*.m` |
 
-Außerdem ist `fastSSM.m` (siehe `fastSSM/fastSSM.m`) eine eigenständige, minimale Re-Implementation des kompletten Stacks in **122 Zeilen**, ausschließlich für **2D-SSMs** ($\text{mfddim} = 2$ hardcoded). Die SSM-Polynom-Ordnung ist über den Eingabeparameter `mfdorder` frei wählbar; **fix hardcoded** sind hingegen die ROM-Ordnung und die Normalform-Ordnung (`romorder = 3`, `nforder = 3` in `fastSSM.m:20`). Sehr gute Referenz für eine Python-Portierung des kohomologischen Kerns, weil die Cohomological Equation für den kubischen Single-Mode-Fall analytisch ordnung-für-ordnung in den Zeilen 45–67 ausgeschrieben ist (Resonanz-Nenner $2\lambda_\ell - \lambda_j$, $\lambda_\ell + \lambda_c - \lambda_j$, $3\lambda_\ell - \lambda_j$). Achtung: keine automatische Resonanzprüfung, keine Small-Denominator-Kontrolle, fest gewählte Gauge.
+Außerdem ist `fastSSM/fastSSM.m` eine eigenständige, minimale Re-Implementation des kompletten Stacks in 122 Zeilen, ausschließlich für 2D-SSMs — ausführlich in §11.4 (beste Vorlage für eine Python-Portierung des kohomologischen Kerns).
 
 ---
 
-## 4. Vollständige Datei-Inventur unter `src/`
+## 5. Vollständige Datei-Inventur unter `src/`
 
-In dieser Sektion ist jede `.m`-Datei aufgeführt, mit Signatur, Zweck und (wenn vorhanden) Original-Header-Zitat. Die Reihenfolge entspricht der Pipeline-Logik, nicht der alphabetischen Sortierung.
+Jede relevante `.m`-Datei mit Signatur, Zweck und (wenn vorhanden) Original-Header-Zitat; Reihenfolge nach Pipeline-Logik. (`SSMLearn/src/` enthält insgesamt 104 `.m`-Dateien mit ~136 `function`-Definitionen, viele davon triviale Helfer.)
 
-### 4.1 `src/preprocessing/`
+### 5.1 `src/preprocessing/`
 
-#### 4.1.1 `showSpectrogram.m` (41 Zeilen)
+#### 5.1.1 `showSpectrogram.m` (41 Zeilen)
 **Signatur:** `[powerdensity, frequencies, times] = showSpectrogram(xData, varargin)`
 
 > "Plot a spectrogram for a scalar signal xData{1,2} at times xData{1,1}"
@@ -129,19 +209,15 @@ In dieser Sektion ist jede `.m`-Datei aufgeführt, mit Signatur, Zweck und (wenn
 
 Berechnet das Short-Time-Fourier-Spektrogramm pro Trajektorie und summiert die Power über alle Trajektorien (Zeile 16-22). Fenstergröße: `Nwin = round(length(t)/10)`, Überlapp 50%. Sample-Rate aus `2*pi/(t(2)-t(1))`. Output dient nachfolgend zur Bestimmung des "linear regime" und der SSM-Dimension.
 
-#### 4.1.2 `analyzeSpectr.m` (28 Zeilen)
+#### 5.1.2 `analyzeSpectr.m` (28 Zeilen)
 **Signatur:** `dominantFreqs_tot = analyzeSpectr(times, frequencies, powerdensity, epsilon)`
 
 Identifiziert dominante Frequenzpeaks per `findpeaks` mit `'MinPeakDistance',10` (Zeile 9). Schwelle wird beim ersten Zeitschritt gesetzt: `minimum_pks = epsilon * max(pks)` (Zeile 12). Nur Peaks $\ge$ Schwelle gelten als dominant. Wird in `SSM_startTime` benutzt um den Beginn der "single-mode"-Phase zu detektieren.
 
-#### 4.1.3 `SSM_startTime.m` (34 Zeilen)
+#### 5.1.3 `SSM_startTime.m` (34 Zeilen)
 **Signatur:** `[startTime, indStartTime, SSMDim] = SSM_startTime(data, indplot)`
 
-Heuristik zur automatischen Bestimmung von:
-- Start-Zeit ab der die Daten "auf der SSM" liegen,
-- empirische SSM-Dimension.
-
-Logik (Zeile 8-20):
+Heuristik zur automatischen Bestimmung von Start-Zeit (ab der die Daten "auf der SSM" liegen) und empirischer SSM-Dimension. Logik (Zeile 8-20):
 ```
 für jeden Zeitschritt:
     n = Anzahl dominanter Frequenzen
@@ -153,12 +229,12 @@ SSMDim_endgültig = SSMDim(end)
 
 Das ist die einzige automatische SSM-Dimension-Schätzung im Repo. Praktisch gibt der User die Dimension meist selbst vor.
 
-#### 4.1.4 `DFT.m` (27 Zeilen)
+#### 5.1.4 `DFT.m` (27 Zeilen)
 **Signatur:** `[amp,ph,freq] = DFT(X,dt)`
 
 Standard-DFT einer Time-Series-Matrix `n.series x n.time_inst`. Behandelt gerade/ungerade $N$ getrennt (Zeilen 13-24). Output ist die einseitige Amplitude / Phase / Frequenzachse. Helfer für Spektralanalysen.
 
-#### 4.1.5 `DMD.m` (49 Zeilen)
+#### 5.1.5 `DMD.m` (49 Zeilen)
 **Signatur:** `[Phi, omega, lambda, b, Xdmd, t] = DMD(X1, X2, r, dt)`
 
 > "Computes the Dynamic Mode Decomposition of X1, X2 — INPUTS: X1 = X data matrix, X2 = X' shifted data matrix"
@@ -168,7 +244,7 @@ Standard-DMD (Tu, Rowley, Kutz). SVD von $X_1$ auf Rang $r$, dann
 $$\tilde A = U_r^\top X_2 V_r S_r^{-1}, \qquad \mathrm{eig}(\tilde A) \to \text{DMD-Modes}.$$
 DMD wird in SSMLearn als optionale Linearisierungs-Kontrolle genutzt, ist aber **nicht** Teil der SSM-Parametrisierung.
 
-#### 4.1.6 `obliqueProjection.m` (116 Zeilen)
+#### 5.1.6 `obliqueProjection.m` (116 Zeilen)
 **Signatur:** `[data_projected, P_min, V_trunc_slow, data_non_projected, data_non_projected_trunc] = obliqueProjection(data, index_proj, SSMDim, overEmbed, ShiftStep, varargin)`
 
 Implementiert die "oblique projection" aus Cenedese et al. 2022:
@@ -177,18 +253,18 @@ Implementiert die "oblique projection" aus Cenedese et al. 2022:
 > — `src/preprocessing/obliqueProjection.m:27-28`
 
 Schritte:
-1. Daten wird auf den Index-Bereich `[index_proj, index_end]` getrunkiert (Zeile 9-25).
+1. Daten werden auf den Index-Bereich `[index_proj, index_end]` getrunkiert (Zeile 9-25).
 2. Delay-Embedding über `coordinatesEmbedding` (Zeile 30).
 3. SVD von `X = [snapshots]` auf Rang `2*SSMDim` (Zeile 42-44).
 4. DMD-ähnliche $\tilde S = U^\top Y V S^{-1}$ und Eigen-Sortierung (Zeile 46-48).
 5. Falls `oblique_projection == true`: nichtlineare Optimierung von $P$ um die Backbone-Oszillationen zu minimieren (Zeile 58 ff.).
 
-#### 4.1.7 `regimeLinear.m` (48 Zeilen)
+#### 5.1.7 `regimeLinear.m` (48 Zeilen)
 **Signatur:** `index_time_linear = regimeLinear(data, lim)`
 
 Findet pro Trajektorie den ersten Index ab dem die Frequenz aus PFF (`PFFk`) "linear" wird, also $|\Delta f|<$ `lim`. Gibt den Mittelwert über alle Trajektorien zurück. Wird benutzt um die Trainingsphase auf den nichtlinearen Regime-Bereich zu begrenzen.
 
-#### 4.1.8 `PFF.m` und `PFFk.m` (59 / 85 Zeilen)
+#### 5.1.8 `PFF.m` und `PFFk.m` (59 / 85 Zeilen)
 **Signatur:** `[amp,freq,damp,time] = PFF(t, x, varargin)`
 
 > "Implementation of the PFF algorithm for extraction of instantaneous damping and frequency of the time signal x known at times t"
@@ -207,7 +283,7 @@ Algorithmus:
 
 `PFFk.m` ist die Variante mit benutzerdefinierter Glättungsfensterbreite `kmean`.
 
-### 4.2 `src/utils/coordinatesEmbedding.m` (110 Zeilen) — Phasenraum-Rekonstruktion
+### 5.2 `src/utils/coordinatesEmbedding.m` (110 Zeilen) — Phasenraum-Rekonstruktion
 
 **Signatur:** `[yData, optsEmbd] = coordinatesEmbedding(xData, SSMDim, varargin)`
 
@@ -244,7 +320,7 @@ Algorithmus:
 5. Print: "The p embedding coordinates consist of the measured states and their (n_N-1) time-delayed measurements" (Zeile 64-67).
 
 #### Wahl von $\tau$
-SSMLearn wählt $\tau = $ `ShiftSteps` $\cdot \mathrm{dt}$ standardmäßig $= \mathrm{dt}$. **Es gibt keine automatische AMI/Cao-basierte $\tau$-Schätzung im Repo.** Der User bekommt das in der Praxis durch Cross-Validation oder Reconstruction-Error empirisch (siehe `Practical_considerations.pdf`):
+SSMLearn wählt $\tau = $ `ShiftSteps` $\cdot \mathrm{dt}$ standardmäßig $= \mathrm{dt}$. **Es gibt keine automatische AMI/Cao-basierte $\tau$-Schätzung im Repo.** Der User bestimmt das in der Praxis durch Cross-Validation oder Reconstruction-Error empirisch:
 
 > "When using delay embedding, the number of time delays and the delay time might need to be adjusted. Increasing the number of time delays practically acts as a filter and may lead to more accurate models. These parameters should be chosen to minimize the reconstruction error, or based on the explicit formulas for the delay-embedded tangent space, as in Axås, Haller, *Nonlinear Dyn* 111, 22079 (2023)."
 > — `docs/Practical_considerations.pdf` Seite 1, Punkt 2
@@ -262,9 +338,9 @@ Implementiert die analytische Formel für Eigenvektoren im Delay-embedded-Raum:
 $$V_{kj} = e^{k\tau\lambda_j}, \qquad k=0,\dots,p-1.$$
 Real- und Imaginärteil werden bei komplex-konjugierten $\lambda$ getrennt (Z. 12-16). Wird genutzt um die Tangentialraum-Initialisierung in `IMGeometryGraphT0` zu beschleunigen, wenn die Eigenwerte vorab bekannt sind.
 
-### 4.3 `src/geometry/` — SSM-Parametrisierung
+### 5.3 `src/geometry/` — SSM-Parametrisierung
 
-#### 4.3.1 `IMGeometry.m` (127 Zeilen) — Wrapper
+#### 5.3.1 `IMGeometry.m` (127 Zeilen) — Wrapper
 
 **Signatur:** `[IMInfo, IMChart, IMParam] = IMGeometry(yData, SSMDim, M, varargin)`
 
@@ -272,10 +348,11 @@ Real- und Imaginärteil werden bei komplex-konjugierten $\lambda$ getrennt (Z. 1
 > — `src/geometry/IMGeometry.m:3-9`
 
 Routet auf zwei Methoden via `optsGeomtery.style`:
-- `'natural'` → ruft `IMGeometryGraphT0` (siehe 4.3.2). Chart $= V^\top$, Parametrisierung als Graph.
-- `'custom'` → User-definierte Karte und Reduzierte Koordinaten; Polynom-Regression über `multivariatePolynomial(SSMDim, 1, M)` (Zeile 100-112).
+- `'natural'` → ruft `IMGeometryGraphT0` (siehe §5.3.2). Chart $= V^\top$, Parametrisierung als Graph.
+- `'custom'` → User-definierte Karte und reduzierte Koordinaten; Polynom-Regression über `multivariatePolynomial(SSMDim, 1, M)` (Zeile 100-112).
 
-#### Optionen `IMGeometry`
+Optionen `IMGeometry`:
+
 | Name | Default | Bedeutung |
 |------|---------|-----------|
 | `style` | 'natural' | 'natural' oder 'custom' |
@@ -289,7 +366,7 @@ Routet auf zwei Methoden via `optsGeomtery.style`:
 
 Die Gewichtung $L(t) = (1+c_1 e^{-c_2 t})^{-1}$ (Zeile 87) ist eine **zeitabhängige Reweighting** für "slow-manifold detection": frühe (transiente) Datenpunkte bekommen geringeres Gewicht weil sie noch nicht auf der SSM liegen.
 
-#### 4.3.2 `IMGeometryGraphT0.m` (208 Zeilen) — Kern
+#### 5.3.2 `IMGeometryGraphT0.m` (208 Zeilen) — Kern
 
 **Signatur:** `[V_e, IMParam, IM_param_info] = IMGeometryGraphT0(X, k, M, varargin)`
 
@@ -389,7 +466,7 @@ struct mit Feldern:
   l, c1, c2            -> Hyperparameter
 ```
 
-#### 4.3.3 `IMGeometryParaCon.m` (159 Zeilen) — Parameter-abhängige SSM
+#### 5.3.3 `IMGeometryParaCon.m` (159 Zeilen) — Parameter-abhängige SSM
 
 **Signatur:** `IMInfo = IMGeometryParaCon(yData, etaData, varargin)`
 
@@ -398,7 +475,7 @@ struct mit Feldern:
 
 Erweitert die Parametrisierung auf Familien von SSMs mit parametrischer Abhängigkeit (z.B. Bifurkations-Parameter $\mu$). Constraints können fixed points $y_0 = V(x_0,p_0)$, Origin-Fixierung $0 = V(0,p)$, und Linearpart $A_0 = D V(x_0,p_0)$ enthalten (Z. 13-22).
 
-#### 4.3.4 Helper-Files in `src/geometry/utilsGraphT0/`
+#### 5.3.4 Helper-Files in `src/geometry/utilsGraphT0/`
 
 | Datei | Zeilen | Zweck |
 |-------|--------|-------|
@@ -409,9 +486,9 @@ Erweitert die Parametrisierung auf Familien von SSMs mit parametrischer Abhängi
 | `extrasNonlinearConstraints.m` | 33 | Index-Helper für sparse Constraint-Jacobian. |
 | `fMinimize.m` | 32 | Kostenfunktion und analytischer Gradient für `fmincon`. |
 
-### 4.4 `src/reduceddynamics/` — Reduzierte Dynamik & Normal Form
+### 5.4 `src/reduceddynamics/` — Reduzierte Dynamik & Normal Form
 
-#### 4.4.1 `IMDynamicsFlow.m` (452 Zeilen) — Generischer Flow-Identifier
+#### 5.4.1 `IMDynamicsFlow.m` (452 Zeilen) — Generischer Flow-Identifier
 
 **Signatur:** `[RDInfo, R, iT, N, T] = IMDynamicsFlow(etaData, varargin)`
 
@@ -507,9 +584,9 @@ Die Toleranz `tol_nf` wird in zwei Modi gesetzt (Z. 320-330):
 - `nf_style='center_mfld'` (Default, Z. 320-327): $\lambda_{nf} = i\,\mathrm{Im}(\lambda)$ (rein imaginär, Center-Manifold-Reduktion). Toleranz hardcoded `1e-8`. Bei vorgegebenen Frequenz-Verhältnissen `frequencies_norm = [m_1, m_2, ...]`: $d_{nf} = i\cdot[m_1,m_2,\dots,-m_1,-m_2,\dots]\cdot|\mathrm{Im}(\lambda_1)|$. Damit kann der User explizit eine 1:2- oder 1:3-Resonanz erzwingen.
 - `nf_style='actual eigs'`: $d_{nf} = d$ (echte Eigenwerte), Toleranz `tol_nf*max(|Re(d)|)`.
 
-##### Cohomological Equation (zentral, das ist Schritt-für-Schritt-Mathematik)
+##### Normalform-Theorie (Poincaré-Dulac, Murdock 2003)
 
-Die Standard-Normal-Form-Theorie (Poincaré-Dulac, Murdock 2003): wir suchen einen Koordinatenwechsel $z = T^{-1}(y) = y + h_2(y) + h_3(y) + \dots$ und eine Normalform $\dot z = N(z) = D z + n_2(z) + n_3(z) + \dots$ sodass die ursprüngliche Dynamik $\dot y = D y + f_2(y) + \dots$ in $N$ konjugiert wird. Bei jedem Polynomgrad $k$ ergibt sich die **Cohomological Equation**:
+Gesucht: Koordinatenwechsel $z = T^{-1}(y) = y + h_2(y) + h_3(y) + \dots$ und Normalform $\dot z = N(z) = D z + n_2(z) + n_3(z) + \dots$, sodass die ursprüngliche Dynamik $\dot y = D y + f_2(y) + \dots$ in $N$ konjugiert wird. Bei jedem Polynomgrad $k$ ergibt sich die **Cohomological Equation**:
 
 $$\mathcal{L}_k\,h_k - n_k = R_k$$
 
@@ -523,7 +600,7 @@ Die Lösung lautet daher:
 - Wenn $\lambda_e - \langle m,\lambda\rangle \neq 0$ (nicht-resonant): $h_k$-Koeffizient $= R_k\text{-Koeffizient}/(\lambda_e - \langle m,\lambda\rangle)$, $n_k\text{-Koeffizient} = 0$.
 - Wenn $\lambda_e - \langle m,\lambda\rangle = 0$ (resonant): $n_k\text{-Koeffizient} = R_k\text{-Koeffizient}$, $h_k\text{-Koeffizient}$ bleibt frei (typisch 0).
 
-In SSMLearn wird diese analytische Auflösung **nicht** ordnung-für-ordnung gemacht; stattdessen werden alle Koeffizienten gleichzeitig per nicht-linearer Optimierung der Invarianz-Gleichung gefunden. Die Resonanz-Entscheidung wirkt nur auf welche Koeffizienten **als unbekannt** angesetzt werden.
+In SSMLearn wird diese analytische Auflösung **nicht** ordnung-für-ordnung gemacht; stattdessen werden alle Koeffizienten gleichzeitig per nicht-linearer Optimierung der Invarianz-Gleichung gefunden. Die Resonanz-Entscheidung wirkt nur darauf, welche Koeffizienten **als unbekannt** angesetzt werden.
 
 ##### Invarianz-Gleichung in der Implementation
 
@@ -576,7 +653,7 @@ W_it_0 = W_it_0 ./ (repmat(d,1,size(Expmat_it,1)) - ...
 ```
 — Z. 344-345 (das ist exakt die analytische Cohomological-Equation-Lösung pro Monom).
 
-Dann wird per `fminunc` die Invarianz-Gleichung wirklich minimiert (falls die Daten von der analytischen Initialisierung abweichen weil die SSM aus Daten kommt, nicht aus dem exakten Vektorfeld).
+Dann wird per `fminunc` die Invarianz-Gleichung wirklich minimiert (falls die Daten von der analytischen Initialisierung abweichen, weil die SSM aus Daten kommt, nicht aus dem exakten Vektorfeld).
 
 ##### Optionen `IMDynamicsFlow` (Auszug der wichtigsten, vollständig in Z. 44-93)
 
@@ -594,7 +671,7 @@ Dann wird per `fminunc` die Invarianz-Gleichung wirklich minimiert (falls die Da
 | `l_vals` | 0 | Ridge-$\lambda$-Kandidaten. |
 | `n_folds` | 0 | Anzahl CV-Folds (0 = keine CV). |
 | `fold_style` | [] | `'default'` (random) oder `'traj'` (LOO-Trajectory). |
-| `c1`, `c2` | 0, 0 | Slow-Manifold-Time-Weighting wie in §4.3. |
+| `c1`, `c2` | 0, 0 | Slow-Manifold-Time-Weighting wie in §5.3. |
 | `rescale` | 1 | Modal-Koord-Rescaling. |
 | `R_coeff` | [] | Vorgegebene lineare Anteile (für Mech mit bekannter Massen-Matrix). |
 | `MaxIter` | 1e3 | fminunc Iterationen. |
@@ -615,7 +692,7 @@ struct mit Feldern:
   eigenvectorsLinPart  -> V
 ```
 
-#### 4.4.2 `IMDynamicsMap.m` (393 Zeilen) — Diskrete Dynamik
+#### 5.4.2 `IMDynamicsMap.m` (393 Zeilen) — Diskrete Dynamik
 
 **Signatur:** `[RDInfo, R, iT, N, T] = IMDynamicsMap(etaData, varargin)`
 
@@ -636,7 +713,7 @@ Strukturell identisch zu `IMDynamicsFlow`, aber:
 - Eigenwerte werden über `log(λ)/Dt` in Continuous-Time umgerechnet (`eigSorted(W_r(:,1:k), Dt)`, Z. 123).
 - Toleranz für Resonanzen ist diskret formuliert: `max(|eig|)*(1-exp(-tol_nf*max(|real(log(eig))|)))` (Doku Z. 60-61).
 
-#### 4.4.3 `IMDynamicsMech.m` (431 Zeilen) — Mechanik-spezifisch
+#### 5.4.3 `IMDynamicsMech.m` (431 Zeilen) — Mechanik-spezifisch
 
 **Signatur:** `[RDInfo, R, iT, N, T] = IMDynamicsMech(X_traj, varargin)`
 
@@ -652,18 +729,18 @@ W_r = [zeros(ndof) eye(ndof) zeros(ndof, size(W_r,2)-2*ndof); W_r];
 ```
 Das halbiert die zu schätzenden Parameter und garantiert die mechanische Struktur.
 
-#### 4.4.4 `IMDynamicsFlowFractional.m` (245 Zeilen)
+#### 5.4.4 `IMDynamicsFlowFractional.m` (245 Zeilen)
 
 Variante mit fraktionellen Polynom-Exponenten, basiert auf `multivariateFractionalPolynomial.m`. Wird für Reibungs-Modelle und nicht-glatte Mechanik verwendet (siehe Bettini, Cenedese, Haller 2024 — `International Journal of Non-Linear Mechanics`).
 
-#### 4.4.5 `IMDynamicsFlowParaCon.m` (163 Zeilen) und `IMDynamicsMapParaCon.m` (164 Zeilen)
+#### 5.4.5 `IMDynamicsFlowParaCon.m` (163 Zeilen) und `IMDynamicsMapParaCon.m` (164 Zeilen)
 
 Parameter-abhängige Varianten ($\dot x = R(x, p)$). Constraints können fixed points $0=R(x_0,p_0)$, Origin-Fixierung $0=R(0,p)$ oder Linear-Anteile $A_0 = D_x R(x_0,p_0)$ enthalten. Diese sind nötig für Bifurkations-Analyse.
 
-#### 4.4.6 `dynamicsCoordChangeNF.m` (155 Zeilen) — Normalform-Solver
-Bereits oben in §4.4.1 ausführlich dokumentiert. Wird sowohl von `IMDynamicsFlow` als auch `IMDynamicsMap` und `IMDynamicsMech` aufgerufen.
+#### 5.4.6 `dynamicsCoordChangeNF.m` (155 Zeilen) — Normalform-Solver
+Bereits in §5.4.1 ausführlich dokumentiert. Wird sowohl von `IMDynamicsFlow` als auch `IMDynamicsMap` und `IMDynamicsMech` aufgerufen.
 
-#### 4.4.7 `conjugacyErrorTrend.m` (44 Zeilen)
+#### 5.4.7 `conjugacyErrorTrend.m` (44 Zeilen)
 
 **Signatur:** `errorInfo = conjugacyErrorTrend(etaData, indTrain, indTest, polyOrders)`
 
@@ -675,9 +752,9 @@ Diagnose-Tool: für jeden Polynom-Grad in `polyOrders`:
 2. Berechne $\Delta := \dot z - N(z)$ für alle Trajektorien.
 3. Plotte $\sum |\Delta|^2$ über Train/Test als Funktion der Ordnung.
 
-Wird benutzt um optimalen ROM-Order zu wählen (kein Auto-Mechanism, User-Hilfe).
+Wird benutzt um optimalen ROM-Order zu wählen (kein Auto-Mechanismus, User-Hilfe).
 
-#### 4.4.8 `src/reduceddynamics/utils/`
+#### 5.4.8 `src/reduceddynamics/utils/`
 
 | Datei | Zeilen | Zweck |
 |-------|--------|-------|
@@ -688,9 +765,9 @@ Wird benutzt um optimalen ROM-Order zu wählen (kein Auto-Mechanism, User-Hilfe)
 | `polarNormalForm.m` | 300 | Konvertiert komplexe NF nach polar $(\rho,\theta)$, definiert `damps(\rho)` und `freqs(\rho)`. |
 | `RidgeRegressionConstrainedParametric.m` | 155 | Ridge mit (parametrischen + fixed-point + linearpart) Constraints. |
 
-### 4.5 `src/postprocessing/` — Forced Response & Backbone
+### 5.5 `src/postprocessing/` — Forced Response & Backbone
 
-#### 4.5.1 `backboneCurves.m` (132 Zeilen)
+#### 5.5.1 `backboneCurves.m` (132 Zeilen)
 
 **Signatur:** `BBCInfo = backboneCurves(IMInfo, RDInfo, amplitudeFunction, maxRho, varargin)`
 
@@ -707,13 +784,13 @@ Output: `damping`, `frequency`, `amplitude`, `amplitudeNormalForm` als $(d/2) \t
 - `'norm'`: relativ zu linearem Limit normiert.
 - (default): rad/s und 1/s.
 
-#### 4.5.2 `backboneSurfaces.m` (150 Zeilen)
+#### 5.5.2 `backboneSurfaces.m` (150 Zeilen)
 
 **Signatur:** `BBSInfo = backboneSurfaces(RDInfo, max_rho, varargin)`
 
 Erweitert Backbone Curves auf 2D-Plots für 4D-SSMs mit zwei Modi (Internal Resonance). Erzeugt $40\times 40$-Meshgrid in $(\rho_1, \rho_2)$ und plottet Frequenz-/Damping-Surfaces.
 
-#### 4.5.3 `computeFRC.m` (109 Zeilen) — Forced Response Curve via Continuation
+#### 5.5.3 `computeFRC.m` (109 Zeilen) — Forced Response Curve via Continuation
 
 **Signatur:** `FRC_data = computeFRC(IMInfo, RDInfo, reducedForcing, frequencySpan, amplitudeFunction)`
 
@@ -732,7 +809,7 @@ Algorithmus pro Forcing-Vector (Z. 31-103):
 
 Output: struct mit Feldern `Freq`, `Amp`, `Nf_Amp`, `Nf_Phs`, `Stab` pro Sweep.
 
-#### 4.5.4 `analyticalFRC.m` (124 Zeilen) — analytische FRC für 2D SSMs
+#### 5.5.4 `analyticalFRC.m` (124 Zeilen) — analytische FRC für 2D SSMs
 
 **Signatur:** `FRC = analyticalFRC(IMInfoF, RDInfoF, fRed, amplitudeFunction, varargin)`
 
@@ -747,10 +824,10 @@ Löst die Ein-Mode-Gleichgewichtsbedingung in polaren Koordinaten:
 $$\alpha(\rho) = 0, \qquad \omega(\rho) = \Omega \pm \frac{f}{\rho}.$$
 Implementiert über symbolisches Solven für jedes $\Omega$. Vermeidet numerische Continuation komplett, ist aber nur für 2D-SSMs (1 DoF in NF) gültig.
 
-#### 4.5.5 `continuationFRCpo.m` (126 Zeilen)
+#### 5.5.5 `continuationFRCpo.m` (126 Zeilen)
 Variante von `computeFRC` für Continuation mit `forcedSSMROM`-Output (zeit-periodische SSM-Parametrisierung).
 
-#### 4.5.6 `continuationFRCep.m` (369 Zeilen)
+#### 5.5.6 `continuationFRCep.m` (369 Zeilen)
 Continuation der **fixed-points** der polaren Normalform anstatt periodischer Bahnen. Konvertiert das Time-Periodic Problem in ein Equilibrium-Problem in der polaren Form (`coordinates = 'polar'`, Z. 33).
 
 > "This function converts the normal form style reduced dynamics on the SSM to fixed point problem to compute the periodic response (FRC) for internally resonant systems"
@@ -758,7 +835,7 @@ Continuation der **fixed-points** der polaren Normalform anstatt periodischer Ba
 
 Nötig für **internal-resonant** Systeme (1:1, 1:2, 1:3, …) wo die analytische FRC nicht reicht.
 
-#### 4.5.7 `calibrateFRC.m` (24 Zeilen)
+#### 5.5.7 `calibrateFRC.m` (24 Zeilen)
 
 **Signatur:** `fRed = calibrateFRC(IMInfo, RDInfo, yCal, Omega)`
 
@@ -769,13 +846,13 @@ Inversion: gegeben gemessene Forced-Response-Punkte, finde die korrespondierende
 $$f = \rho\sqrt{(\omega(\rho)-\Omega)^2 + \alpha(\rho)^2}.$$
 (Z. 23). Wird beim Sloshing-Beispiel benutzt um aus 3 experimentellen Forced-Punkten zu kalibrieren.
 
-#### 4.5.8 `plotFRC.m` (110 Zeilen)
+#### 5.5.8 `plotFRC.m` (110 Zeilen)
 Nur Visualisierung. Plottet alle Sweeps (`F1`, `F2`, …) in einer Figur.
 
-#### 4.5.9 `cocoutils/`
-Helper für coco-Continuation: `add_slot_IP`, `add_slot_Traj`, `coco_bd_labs_and_period`. Reine Glue-Funktionen.
+#### 5.5.9 `cocoutils/`
+Helper für coco-Continuation: `add_slot_IP` (COCO-Slot-Helper für Internal Phase Continuation), `add_slot_Traj` (Trajektorien-Sampling während Continuation), `coco_bd_labs_and_period` (extrahiert Labels + Perioden aus bd-struct). Reine Glue-Funktionen.
 
-### 4.6 `src/timedependentmanifold/forcedSSMROM.m` (170 Zeilen)
+### 5.6 `src/timedependentmanifold/forcedSSMROM.m` (170 Zeilen)
 
 **Signatur:** `[IMInfoF, RDInfoF] = forcedSSMROM(IMInfo, RDInfo, varargin)`
 
@@ -791,22 +868,22 @@ Wandelt eine autonome SSM aus `IMGeometry` + Normalform aus `IMDynamicsFlow` in 
 
 Ist die einzige Datei in `src/timedependentmanifold/`.
 
-### 4.7 `src/utils/` — Helper, Plot, I/O
+### 5.7 `src/utils/` — Helper, Plot, I/O
 
-Hier sind alle Hilfsfunktionen. Ich liste sie kompakt mit einer Zeile pro Datei. Kritische Helper sind oben schon ausführlich behandelt.
+Kompakt eine Zeile pro Datei; kritische Helper sind oben ausführlich behandelt.
 
 | Datei | Zeilen | Zweck |
 |-------|--------|-------|
 | `advect.m` | 33 | Integriert RDInfo aus initialer Bedingung in `yData` und liftet zurück nach $y$. Zentraler Predict-Helper. |
 | `advectRD.m` | (kurz) | Integriert nur in reduzierten Koordinaten (kein Lift). |
-| `cocoSet.m` | (kurz) | coco-Optionen-Setter. |
+| `cocoSet.m` | (kurz) | Setzt coco-Optionen einheitlich (NTST, NCOL, PtMX, etc.). |
 | `computeAmpPhaseErrors.m` | (kurz) | Berechnet Amp/Phasen-Fehler einer FRC vs Daten. |
 | `computeParametrizationErrors.m` | 11 | $\|\text{lift}\circ\text{project}(y) - y\|/\|y\|$ pro Trajektorie. |
 | `computeTrajectoryErrors.m` | 37 | $\|y_1-y_2\|/\max\|y_2\|$ pro Trajektorie + Amplituden-Fehler. |
-| `contFRC.m` | (kurz) | Continuation-Helper. |
+| `contFRC.m` | (kurz) | Wrapper für FRC-Continuation, dispatcht zwischen `continuationFRCep`/`po`. |
 | `convertLivescript2Markdown.m` | (kurz) | Konvertiert .mlx zu .md (Doku-Build). |
-| `coordinatesEmbedding.m` | 110 | Delay-Embedding (siehe §4.2). |
-| `embedCoordinates.m` | 38 | Vereinfachtes Delay-Embedding (siehe §4.2). |
+| `coordinatesEmbedding.m` | 110 | Delay-Embedding (siehe §5.2). |
+| `embedCoordinates.m` | 38 | Vereinfachtes Delay-Embedding (siehe §5.2). |
 | `ep_reduced_results.m` | (kurz) | Equilibrium-Point-Continuation-Output-Reader. |
 | `errorAmplitudePhase.m` | (kurz) | Amp/Phase-Vergleich. |
 | `finiteTimeDifference.m` | 26 | Zentrale FD-Ableitung Ordnung $2h$, $h\le 4$. |
@@ -824,7 +901,7 @@ Hier sind alle Hilfsfunktionen. Ich liste sie kompakt mit einer Zeile pro Datei.
 | `linearpart.m` | 40 | Berechnet $A$, $V$, $\lambda$ aus $M, C, K$ (mit/ohne Damping). |
 | `modal_analysis.m` | (kurz) | FE-Modal-Analyse für vorberechnete Strukturmodelle. |
 | `monitor_states.m` | (kurz) | coco-Monitoring-Funktion. |
-| `multivariateExponents.m` | 199 | Generiert die Multi-Index-Matrix für $k$-variate Polynome vom Grad $N$ (rekursiv via `expomatr`). Cf. §4.4.1. |
+| `multivariateExponents.m` | 199 | Generiert die Multi-Index-Matrix für $k$-variate Polynome vom Grad $N$ (rekursiv via `expomatr`). Cf. §5.4.1. |
 | `multivariateFractionalPolynomial.m` | (kurz) | Polynom mit fraktionellen Exponenten (Reibung). |
 | `multivariatePolynomialLinTransf.m` | 25 | Berechnet $V_M$ s.d. $\phi(Vy) = V_M \phi(y)$ (für Modal-Transform der NL Koeffs). |
 | `multivariatePolynomial.m` | 35 | Erzeugt symbolisch das Monom-Vektorfeld $\phi(u)$ und seine Ableitungs-Tabelle. |
@@ -849,29 +926,29 @@ Hier sind alle Hilfsfunktionen. Ich liste sie kompakt mit einer Zeile pro Datei.
 | `sliceTrajectories.m` | 24 | Schneidet Trajektorien auf Zeit-Intervalle. |
 | `SSMToolFRCFE.m`, `SSMToolFRC.m` | (lang) | Bridge zu SSMtool für analytische FRC-Berechnung als Vergleich. |
 | `static_analysis.m` | (kurz) | Statische Antwort einer Struktur. |
-| `timeWeighting.m` | (kurz) | Time-Weighting-Vektor-Builder. |
+| `timeWeighting.m` | (kurz) | Time-Weighting-Vektor-Builder (Parameter $c_1, c_2$). |
 | `transformationComplexConj.m` | 3 | $x \mapsto [x; \bar x]$. |
 | `transformationReIm.m` | 4 | $x \mapsto [\mathrm{Re}\,x; \mathrm{Im}\,x]$. |
 | `transformTrajectories.m` | 31 | Wendet eine Map auf alle Trajektorien-States an. |
-| `unravelField.m` | (kurz) | Entrolt 2D-Felder zu Vektoren. |
+| `unravelField.m` | (kurz) | Entrollt 2D-Felder zu Vektoren. |
 
 ---
 
-## 5. End-to-End Workflow als nummerierte Schrittliste (für Codex-Checkliste)
+## 6. End-to-End Workflow als nummerierte Schrittliste (für Codex-Checkliste)
 
-Das ist die exakte Schritt-für-Schritt-Pipeline wie sie in den Beispielen abläuft. Jeder Schritt zitiert die Funktion(en), die ihn implementieren.
+Exakte Schritt-für-Schritt-Pipeline wie in den Beispielen; jeder Schritt zitiert die implementierende(n) Funktion(en).
 
-### 5.1 Schritt: Daten laden und Cell-Format herstellen
+### 6.1 Schritt: Daten laden und Cell-Format herstellen
 - **Was:** Daten in `xData{i,1}=t_i`, `xData{i,2}=x_i` packen. Konstantes $\Delta t$ pro Trajektorie.
 - **Code-Anker:** Standard-MATLAB. Beispiel: `examples/sloshing/sloshing.mlx`.
 
-### 5.2 Schritt: SSM-Dimension bestimmen
+### 6.2 Schritt: SSM-Dimension bestimmen
 - **Manuell** (häufigster Fall): User wählt $d \in \{2, 4, 6, ...\}$ basierend auf erwarteter Anzahl Eigenwert-Paare.
 - **Automatisch:**
   - `[startTime, indStartTime, SSMDim] = SSM_startTime(data, indplot)` (`src/preprocessing/SSM_startTime.m`)
   - intern: `showSpectrogram` → `analyzeSpectr` (welche Frequenzen sind dominant über die Zeit?).
 
-### 5.3 Schritt: Trunkierung der Daten auf den SSM-Bereich
+### 6.3 Schritt: Trunkierung der Daten auf den SSM-Bereich
 - **Was:** Frühe Transienten verwerfen, weil sie noch nicht auf der SSM liegen.
 - **Code-Anker:**
   - `regimeLinear(data, lim)` für PFF-basierte Detektion eines linearen Regimes.
@@ -880,13 +957,13 @@ Das ist die exakte Schritt-für-Schritt-Pipeline wie sie in den Beispielen ablä
   > "We must make sure that the data approximates the SSM, i.e., sufficient truncation has been applied. This can be decided based on the spectrogram."
   > — `docs/Practical_considerations.pdf` Seite 1, Punkt 1
 
-### 5.4 Schritt: Phasenraum-Rekonstruktion (Delay Embedding)
+### 6.4 Schritt: Phasenraum-Rekonstruktion (Delay Embedding)
 - **Was:** Wenn der Beobachterraum nicht reichhaltig genug ist (z.B. nur skalare Messung), stacke Zeit-verschobene Kopien.
-- **Code-Anker:** `[yData, optsEmbd] = coordinatesEmbedding(xData, SSMDim, 'OverEmbedding', 0, 'ShiftSteps', 1)` (siehe §4.2).
+- **Code-Anker:** `[yData, optsEmbd] = coordinatesEmbedding(xData, SSMDim, 'OverEmbedding', 0, 'ShiftSteps', 1)` (siehe §5.2).
 - **Default $p$:** $\lceil (2d+1)/n\rceil$ Kopien (Takens-Mindest-Embedding), augmentiert mit `OverEmbedding` extra Kopien.
 - **$\tau$-Wahl:** Default `ShiftSteps=1`, also $\tau=\Delta t$. User-tunable, kein Auto-AMI/Cao.
 
-### 5.5 Schritt: SSM-Parametrisierung fitten
+### 6.5 Schritt: SSM-Parametrisierung fitten
 - **Was:** Konstruiere die Polynom-Parametrisierung $W: \mathbb{R}^d \to \mathbb{R}^p$.
 - **Code-Anker:**
   ```matlab
@@ -900,15 +977,15 @@ Das ist die exakte Schritt-für-Schritt-Pipeline wie sie in den Beispielen ablä
   4. Optimiere $\min_{V_e,H} \mathcal J$ unter $V_e^\top V_e=I$, $V_e^\top H=0$ via `fmincon`.
   5. Output: `IMInfo.chart.map = @(x) V_e'*x` (linear), `IMInfo.parametrization.map = @(q) V_e*q + H*phi(q)`.
 
-### 5.6 Schritt: Reduzierte Koordinaten projizieren
+### 6.6 Schritt: Reduzierte Koordinaten projizieren
 - **Was:** $\eta_i = V_e^\top y_i$ pro Trajektorien-Snapshot.
 - **Code-Anker:** `etaData = projectTrajectories(IMInfo, yData)` → wendet `IMInfo.chart.map` auf jeden Snapshot an.
 
-### 5.7 Schritt: Fitting-Fehler der Parametrisierung
+### 6.7 Schritt: Fitting-Fehler der Parametrisierung
 - **Code-Anker:** `errors = computeParametrizationErrors(IMInfo, yData)`.
 - Berechnet $\|\text{lift}(\text{project}(y)) - y\| / \max\|y\|$.
 
-### 5.8 Schritt: Reduzierte Dynamik fitten
+### 6.8 Schritt: Reduzierte Dynamik fitten
 - **Was:** $\dot \eta = R(\eta)$ als Polynom Grad $M_R$.
 - **Code-Anker (Flow):**
   ```matlab
@@ -920,16 +997,16 @@ Das ist die exakte Schritt-für-Schritt-Pipeline wie sie in den Beispielen ablä
   ```
 - **Code-Anker (Map):** `IMDynamicsMap(etaData, 'R_PolyOrd', M_R, ...)`.
 - **Code-Anker (Mechanik):** `IMDynamicsMech(etaData, ...)`.
-- **Was passiert intern (siehe §4.4.1):**
+- **Was passiert intern (siehe §5.4.1):**
   1. Numerische Ableitung via `finiteTimeDifference`.
   2. Polynom-Basis $\phi$ Ordnung 1 bis $M_R$.
   3. Ridge-Regression $W_r = (\Phi^\top L \Phi + \lambda I)^{-1}\Phi^\top L \dot X$ mit CV.
   4. Eigenwert-Sortierung.
-  5. Optional Modal- oder Normalform-Wechsel (siehe §5.9).
+  5. Optional Modal- oder Normalform-Wechsel (siehe §6.9).
 
-### 5.9 Schritt: Normalform-Reduktion (optional, nur für oszillatorische SSMs)
+### 6.9 Schritt: Normalform-Reduktion (optional, nur für oszillatorische SSMs)
 - **Code-Anker:** automatisch wenn `'style','normalform'` in `IMDynamicsFlow`.
-- **Was passiert (siehe §4.4.1):**
+- **Was passiert (siehe §5.4.1):**
   1. `eigSorted` → komplex-konjugierte Eigenwerte sortiert.
   2. `initialize_nf_flow`: detektiere resonante Indizes via `|d_e - <m, d>| < tol_nf`.
   3. Initialisiere $W_{iT,0}$ aus Cohomological-Equation-Solution.
@@ -937,17 +1014,17 @@ Das ist die exakte Schritt-für-Schritt-Pipeline wie sie in den Beispielen ablä
   5. Berechne $T$ aus $\eta = T(z)$ via Ridge-Regression auf $z = \eta + W_{iT}\phi_{iT}(\eta)$.
 - **Output:** $iT, N, T$ als Funktions-Handles + Koeffizienten-Tabellen.
 
-### 5.10 Schritt: Polare Normalform (Damping/Frequency-Funktionen)
+### 6.10 Schritt: Polare Normalform (Damping/Frequency-Funktionen)
 - **Code-Anker:** `polarNormalForm(NInfo, optPlot)`.
 - **Was:** Konvertiert komplexe NF in $(\rho, \theta)$ und definiert
   $$\alpha(\rho) = \mathrm{Re}\,(N\bar z/|z|^2), \qquad \omega(\rho) = \mathrm{Im}\,(N\bar z/|z|^2).$$
 - Speichert `damping`, `frequency` als Function-Handles in `RDInfo.conjugateDynamics`.
 
-### 5.11 Schritt: Backbone Curves
+### 6.11 Schritt: Backbone Curves
 - **Code-Anker:** `BBCInfo = backboneCurves(IMInfo, RDInfo, amplitudeFunction, maxRho, 'Hz')`.
 - **Output:** $\omega(\rho)$, $\alpha(\rho)$, plus Amplitude $A(\rho) = \max_\theta |\text{amplitudeFunction}(W(T(\rho e^{i\theta})))|$.
 
-### 5.12 Schritt: Forced Response (für autonome SSM mit hinzu-modelliertem Forcing)
+### 6.12 Schritt: Forced Response (für autonome SSM mit hinzu-modelliertem Forcing)
 - **Code-Anker für 2D-SSM:** `analyticalFRC(IMInfoF, RDInfoF, fRed, ampFun)`.
 - **Code-Anker für höherdim. oder resonante SSM:**
   ```matlab
@@ -956,7 +1033,7 @@ Das ist die exakte Schritt-für-Schritt-Pipeline wie sie in den Beispielen ablä
   ```
   oder `continuationFRCpo` / `continuationFRCep` für interne Resonanz.
 
-### 5.13 Schritt: Validierung
+### 6.13 Schritt: Validierung
 - **Code-Anker:**
   - `[yRec, etaRec, zRec] = advect(IMInfo, RDInfo, yData)` — Predict aus initialer Bedingung.
   - `normedTrajDist = computeTrajectoryErrors(yRec, yData)` — NMTE pro Trajektorie.
@@ -965,9 +1042,9 @@ Das ist die exakte Schritt-für-Schritt-Pipeline wie sie in den Beispielen ablä
 
 ---
 
-## 6. Zentrale Mathematik (vollständig ausgeschrieben)
+## 7. Zentrale Mathematik (vollständig ausgeschrieben)
 
-### 6.1 Invarianz-Gleichung der Parametrisierung
+### 7.1 Invarianz-Gleichung der Parametrisierung
 
 Eine SSM ist eine **invariante Mannigfaltigkeit**: wenn $x(0) \in \mathcal{W}$, dann $x(t) \in \mathcal{W}$ für alle $t$. Mit der Parametrisierung $x = W(y)$ und der reduzierten Dynamik $\dot y = R(y)$ folgt
 
@@ -1002,7 +1079,7 @@ Beide Fits sind **algorithmisch unabhängig**. Die SSM-Invarianz $DW(y)\,R(y) = 
 
 Diese Strategie ist **rigoros verschieden** von der Parametrisierungs-Methode in SSMtool, wo $W_k$ und $R_k$ ordnungsweise so konstruiert werden, dass die Invarianz-Gleichung exakt bis zur jeweiligen Polynomordnung erfüllt ist.
 
-### 6.2 Cohomological Equation in Eigenraum-Basis
+### 7.2 Cohomological Equation in Eigenraum-Basis
 
 Sei $A = V \Lambda V^{-1}$ die Eigenzerlegung der Jacobi-Matrix mit $\Lambda = \mathrm{diag}(\lambda_1,\dots,\lambda_N)$, $D_E = \mathrm{diag}(\lambda^{(1)}_E,\dots,\lambda^{(d)}_E)$ die Master-Eigenwerte, und betrachte einen einzelnen Polynom-Term $y^m e_j := y_1^{m_1}\cdots y_d^{m_d} e_j$ in der $j$-ten Komponente einer geeigneten Basis. Wende den Cohomological Operator $\mathcal{L}_k W_k = DW_k\cdot D_E\,y - A\,W_k$ an: die Wirkung auf dieses Monom ist
 $$\mathcal{L}_k\big(y^m e_j\big) \;=\; \big(\langle m, \lambda_E\rangle - \lambda_j\big)\,y^m\,e_j,$$
@@ -1013,22 +1090,15 @@ mit $\langle m,\lambda_E\rangle := m_1\lambda^{(1)}_E + \dots + m_d\lambda^{(d)}
 **Non-Resonanz:** $\big|\langle m,\lambda_E\rangle - \lambda_j\big| > 0$. Für slaved Richtungen $j\notin E$ folgt aus $\mathcal{L}_k W_k = G_k$ in dieser Komponente direkt
 $$h_{k,m,j} \;=\; \frac{G_{k,m,j}}{\langle m,\lambda_E\rangle - \lambda_j}.$$
 
-**Small-Denominators-Problem:** Wenn $|\lambda_e - \langle m,\lambda\rangle|$ klein ist (aber nicht null), wird $h_{k,m,e}$ groß und numerisch instabil. SSMLearn detektiert solche Terme über die Toleranz `tol_nf`:
-```matlab
-lidx_n = find(abs(repmat(d_nf,1,size(Expmat_n,1)) - ...
-              repmat(transpose(Expmat_n*d_nf),k,1)) < tol_nf);
-```
-— `src/reduceddynamics/IMDynamicsFlow.m:332-333`
+**Small-Denominators-Problem:** Wenn $|\lambda_e - \langle m,\lambda\rangle|$ klein ist (aber nicht null), wird $h_{k,m,e}$ groß und numerisch instabil. SSMLearn detektiert solche Terme über die Toleranz `tol_nf` (Code in §5.4.1, `src/reduceddynamics/IMDynamicsFlow.m:332-333`) und behandelt sie als "fast-resonant", d.h. behält sie in $N$ und entfernt sie aus $T^{-1}$.
 
-und behandelt sie als "fast-resonant", d.h. behält sie in $N$ und entfernt sie aus $T^{-1}$.
-
-### 6.3 Center-Manifold-Stil
+### 7.3 Center-Manifold-Stil
 
 Im Default `nf_style = 'center_mfld'` wird $\lambda_{nf} = i\,\mathrm{Im}(\lambda)$ gesetzt (Z. 320-323). Damit wird die Resonanz-Bedingung
 $$|\mathrm{Im}(\lambda_e) - \langle m, \mathrm{Im}(\lambda)\rangle| < 10^{-8}$$
 geprüft. Das ist eine **Frequenz-Resonanz** im Center-Manifold-Sinn: der nichttriviale Realteil (Damping) wird ignoriert, weil er für die Existenz der zentralen invarianten Mannigfaltigkeit irrelevant ist. Dies ist robuster als die "actual eigs"-Variante bei numerisch fast-resonanten Systemen.
 
-### 6.4 Spektralgap (formell)
+### 7.4 Spektralgap (formell)
 
 Mit $\lambda_e$ den Eigenwerten in $E$ und $\lambda_o$ denen außerhalb, gilt für eine **slow stable** SSM die **strikte** Spektralgap-Bedingung:
 $$\boxed{\;\max_{o\notin E}\mathrm{Re}\,\lambda_o \;<\; \min_{e\in E}\mathrm{Re}\,\lambda_e \;<\; 0.\;}$$
@@ -1038,7 +1108,7 @@ Diese Form ist konsistent mit der Doppel-Bedingung in §1.2: $\max_{e\in E}\math
 
 SSMLearn überprüft das **nicht** automatisch — der User muss sicherstellen, dass die gewählte Modal-Untermenge tatsächlich die strikt langsamste ist (durch Schauen auf die Eigenwerte aus `eigSorted`).
 
-### 6.5 Multivariate-Polynom-Regression (Frobenius-Norm Kostenfunktion)
+### 7.5 Multivariate-Polynom-Regression (Frobenius-Norm Kostenfunktion)
 
 Für die SSM-Geometrie (`IMGeometryGraphT0`):
 $$\min_{V_e,H} \;\frac{1}{nN}\sum_{i=1}^N \big\|(x_i - V_e y_i - H\phi(y_i))\,L_{ti}\big\|_2^2 + \frac{1}{nN}\,\lambda\,\|H\|_F^2$$
@@ -1049,7 +1119,7 @@ $$\min_{W_r}\; \big\|(\dot X - W_r\,\Phi(X))\,L\big\|_F^2 + \lambda\|W_r\|_F^2.$
 
 Beide werden in geschlossener Form gelöst (Ridge), bzw. die Geometrie-Variante über `fmincon` falls $V_e$ unbekannt ist.
 
-### 6.6 Iterative Orbit-Rekonstruktion
+### 7.6 Iterative Orbit-Rekonstruktion
 
 SSMLearn verwendet **keine** iterative Orbit-Rekonstruktion (im Sinne von Picard-Iterationen). Die Predict-Pipeline ist einfach:
 ```
@@ -1064,9 +1134,9 @@ opts = odeset('RelTol',1e-4);
 
 ---
 
-## 7. Outputs
+## 8. Outputs
 
-### 7.1 `IMInfo` (struct)
+### 8.1 `IMInfo` (struct)
 - `chart.map`: Funktion $\mathbb{R}^p \to \mathbb{R}^d$ (Projektion in reduzierte Koordinaten).
 - `chart.polynomialOrder`: 1 (linear, $V_e^\top$).
 - `parametrization.map`: Funktion $\mathbb{R}^d \to \mathbb{R}^p$ (Polynom $W$).
@@ -1077,7 +1147,7 @@ opts = odeset('RelTol',1e-4);
 - `parametrization.phi`: $\phi$ als Funktions-Handle.
 - `parametrization.exponents`: Multi-Index-Matrix.
 
-### 7.2 `RDInfo` (struct)
+### 8.2 `RDInfo` (struct)
 - `reducedDynamics.{map, coefficients, polynomialOrder, phi, exponents, l_opt, CV_error}`: $R(y)$.
 - `inverseTransformation.{map, coeff, phi, exponents, lintransf}`: $iT$.
 - `transformation.{map, coeff, phi, exponents, lintransf}`: $T$.
@@ -1087,20 +1157,22 @@ opts = odeset('RelTol',1e-4);
 - `eigenvaluesLinPartFlow`: Vektor der Eigenwerte.
 - `eigenvectorsLinPart`: $V$.
 
-### 7.3 `BBCInfo` (Backbone)
+### 8.3 `BBCInfo` (Backbone)
 - `damping(d/2 × 1001)`: $\alpha(\rho)$ pro Mode.
 - `frequency(d/2 × 1001)`: $\omega(\rho)$ pro Mode.
 - `amplitude(d/2 × 1001)`: physikalische Amplitude.
 - `amplitudeNormalForm(d/2 × 1001)`: $\rho$-Achse.
 
-### 7.4 `FRC_data` (Forced Response)
+### 8.4 `FRC_data` (Forced Response)
 - Pro Sweep `F1, F2, ...`: `Freq, Amp, Nf_Amp, Nf_Phs, Stab` als Vektoren.
 
 ---
 
-## 8. Beispiele unter `examples/` (vollständige Liste)
+## 9. Beispiele unter `examples/` (vollständige Liste)
 
-`SSMLearn/examples/` enthält **20 Top-Level-Verzeichnisse**, jeweils mit 1-Zeilen-Beschreibung, primärem Hauptscript und Domäne. Mechanisch/FEM ist die überwältigende Mehrheit; nicht-mechanische Domänen sind explizit markiert. Zwei zusätzliche Beispiel-Bäume liegen außerhalb von `examples/` (siehe §8.2).
+### 9.1 Übersicht
+
+`SSMLearn/examples/` enthält **20 Top-Level-Verzeichnisse**, jeweils mit 1-Zeilen-Beschreibung, primärem Hauptscript und Domäne. Mechanisch/FEM ist die überwältigende Mehrheit; nicht-mechanische Domänen sind explizit markiert.
 
 | # | Verzeichnis | Hauptscript(s) | Domäne | Beschreibung |
 |---|-------------|----------------|--------|--------------|
@@ -1109,7 +1181,7 @@ opts = odeset('RelTol',1e-4);
 | 3 | `couetteflow/` | `romRe134.mlx`, `romRe135.mlx`, `romRe146.mlx`, `romRe134Fractional.mlx` | **Strömungs-Mechanik (CFD)** | Plane Couette Flow zwischen Re=134 und 146; SSM um den Upper-Branch-Fixpunkt. CFD-Daten via Channelflow, PCA-komprimiert auf 20 Modi. **NICHT-mechanisch aber strukturell**. |
 | 4 | `experiment_nonlinear_beam_oblique/` | `nonlinear_beam_oblique.mlx` | **Mechanik (Experiment)** | Nichtlinearer Beam mit oblique-projection-Methode. |
 | 5 | `invertedflag/` | `regular_flapping.mlx`, `chaotic_case.mlx` | **Fluid-Struktur (Experiment)** | Inverted Flag im Wassertunnel; reguläre und chaotische Flapping-Regime. 2D und 4D SSMs. **Chaotisches Beispiel hier!** |
-| 6 | `oscillatorchain/` | `oscillator2D.mlx`, `oscillator4D.mlx`, `oscillator2DTakens.mlx`, `oscillator_tutorial.mlx` | **Mechanik (synthetisch)** | $N$-DoF Oszillatorkette mit zusätzlicher nichtlinearer Feder; slow 4D SSM. Auch der `oscillator2DTakens.mlx`-Beispielfall demonstriert Delay-Embedding-Workflow für skalare Observable. |
+| 6 | `oscillatorchain/` | `oscillator2D.mlx`, `oscillator4D.mlx`, `oscillator2DTakens.mlx`, `oscillator_tutorial.mlx` | **Mechanik (synthetisch)** | $N$-DoF Oszillatorkette mit zusätzlicher nichtlinearer Feder; slow 4D SSM. `oscillator2DTakens.mlx` demonstriert den Delay-Embedding-Workflow für skalare Observable. |
 | 7 | `parametricSSM_TimeDelay/` | `Furuta/`, `Various/` (Subordner) | **Mechanik (Experiment + Simulation)** | Parametrische SSM mit Zeit-Delays. Subordner: `Furuta/` mit Furuta-Pendel und chaotischem Attraktor (Trajectory Generator → ParametricSSM → ChaoticAttractor); `Various/` als Sammelkasten. **Ein einziges Top-Level-Verzeichnis.** |
 | 8 | `planarexample/` | `planarexample.mlx`, `planar.m` | **Synthetisch 2D ODE** | Planares System $\dot x = x(y-b), \dot y = cy(x-a)$ mit zwei Fixpunkten und heteroklinem Orbit. **Reine ODE-Pädagogik**, kein mechanischer Hintergrund. Closest example zu generic phase-space dynamics. |
 | 9 | `prismaticbeam/` | `prismaticbeam.mlx` | **Mechanik (FE)** | 4D SSM für 1:3 internal resonant prismatic beam. |
@@ -1117,15 +1189,15 @@ opts = odeset('RelTol',1e-4);
 | 11 | `shaw_pierre_cart_oblique/` | `shaw_pierre_cart_oblique.mlx` | **Mechanik (synthetisch)** | Shaw-Pierre 2-DoF Oszillator in kartesischen Koordinaten mit oblique projection. |
 | 12 | `shaw_pierre_oblique/` | `shaw_pierre_oblique.mlx` | **Mechanik (synthetisch)** | Shaw-Pierre mit oblique projection. |
 | 13 | `shawpierreforced/` | `shawpierreforced.mlx`, `poincareMap.m`, `shawpierre.m` | **Mechanik (synthetisch + forced)** | Shaw-Pierre forced; Übergänge zwischen periodischen Orbits via Poincaré-Map. |
-| 14 | `sloshing/` | `sloshing.mlx` | **Fluid-Mechanik (Experiment)** | Schwallendes Wasser in horizontal angeregtem Tank; Center-of-Mass-Trajektorien (Decay-Daten). 2D SSM. Forced-Response-Vorhersage aus 3 kalibrierten Punkten. **Quasi-skalare Zeitreihe!** |
+| 14 | `sloshing/` | `sloshing.mlx` | **Fluid-Mechanik (Experiment)** | Schwappendes Wasser in horizontal angeregtem Tank; Center-of-Mass-Trajektorien (Decay-Daten). 2D SSM. Forced-Response-Vorhersage aus 3 kalibrierten Punkten. **Quasi-skalare Zeitreihe!** |
 | 15 | `tribomechadynamics_benchmark/` | `SSMBasedROM.mlx`, `comsolPOs.mat`, `RDinfoO5NF.mat` | **Mechanik (FE-Benchmark)** | Tribomechadynamics Benchmark mit Reibung; Reduktion auf 3-DoF SSM (siehe Morsy et al. 2025). |
 | 16 | `vonkarmanbeam/` | `vonkarmanbeam.mlx`, `vonkarmanbeamPS.mlx` | **Mechanik (FE)** | Clamped-clamped von-Kármán-Beam; 2D SSM mit skalarer Mittelpunkt-Verschiebung. |
 | 17 | `vonkarmanplateIR/` | `vonkarmanplateIR.mlx` | **Mechanik (FE)** | Quadratische von-Kármán-Platte mit 1:1 internal resonance; intermediate 4D SSM. |
 | 18 | `vonkarmanshell/` | `vonkarmanshell.mlx` | **Mechanik (FE)** | Shallow-curved Shell mit geometrischer Nichtlinearität. |
 | 19 | `vonkarmanshellIR/` | `vonkarmanshellIR.mlx` | **Mechanik (FE)** | Shell mit internal resonance zwischen den zwei langsamsten Modi. |
-| 20 | `vortexshedding/` | `vortexshedding.mlx` | **Strömung (CFD)** | POD-Trajektorien einer 2D-Strömung um einen Zylinder bei Re=70; Konvergenz zum Limit-Cycle der Vortex-Shedding-Regimes. **NICHT-mechanisch.** |
+| 20 | `vortexshedding/` | `vortexshedding.mlx` | **Strömung (CFD)** | POD-Trajektorien einer 2D-Strömung um einen Zylinder bei Re=70; Konvergenz zum Limit-Cycle des Vortex-Shedding-Regimes. **NICHT-mechanisch.** |
 
-### 8.2 Weitere Beispiel-Bäume außerhalb `examples/`
+### 9.2 Weitere Beispiel-Bäume außerhalb `examples/`
 
 Zwei separate Beispiel-Sammlungen liegen NICHT unter `examples/`, gehören aber zum Repo:
 
@@ -1139,20 +1211,20 @@ Zwei separate Beispiel-Sammlungen liegen NICHT unter `examples/`, gehören aber 
 - `shaw_pierre/` — Shaw-Pierre mit nicht-glatten Komponenten
 - `von_karman_beam/` — vonKarman-Beam mit nicht-glatten Komponenten
 
-### 8.1 Zusammenfassung der Domänen
+### 9.3 Zusammenfassung der Domänen
 - **Mechanik (FE/Experimente):** 16 Beispiele.
 - **Strömungs-Mechanik (CFD):** 2 (Couette, Vortex Shedding) — strukturell ähnlich aber kein Federsystem.
-- **Fluid-Struktur (Experimente):** 1 (Inverted Flag) — chaotischer Regime!
+- **Fluid-Struktur (Experimente):** 1 (Inverted Flag) — chaotisches Regime!
 - **Reine 2D ODE / Pädagogik:** 1 (planarexample).
 - **Sloshing / Quasi-skalar:** 1 (sloshing).
 
-### 8.2 Wo gibt es **keine** Beispiele
+### 9.4 Wo gibt es **keine** Beispiele
 - **Finanz-Zeitreihen.** Kein einziges Beispiel mit BTC, Aktien, FX oder Asset Returns.
 - **Klima/Wetter-Daten.** Keine Beispiele mit ENSO, Temperatur-Reihen, etc.
 - **Biologie/EEG.** Keine Beispiele.
 - **Generische Zeitreihen ohne ODE-Hintergrund:** Das nächste an "rein observational" ist `sloshing` (Center-of-Mass-Trajektorien aus Experiment), gefolgt von `brakereussbeam` (DIC-Daten), `invertedflag` (chaotic flapping experiments) und `vortexshedding` (CFD-Snapshots). In allen Fällen weiß man aber dass ein autonomes ODE/PDE-System dahintersteht.
 
-### 8.3 Beispiele die strukturell zu BTC log-Residuen passen könnten
+### 9.5 Beispiele die strukturell zu BTC log-Residuen passen könnten
 - **`sloshing/sloshing.mlx`** — quasi-skalare Time-Series, Decay zu einem Limit Cycle, Forced Response per Calibration. Strukturell am nächsten zu "Decay-zu-Attraktor".
 - **`vortexshedding/vortexshedding.mlx`** — POD-komprimierte Time-Series, Convergence zu Limit Cycle aus instabilem Origin.
 - **`invertedflag/chaotic_case.mlx`** — chaotic regime, demonstriert SSMLearn auf nicht-periodischen Trajektorien (Liu, Axås, Haller 2024 — Inertial Manifold als SSM).
@@ -1160,41 +1232,41 @@ Zwei separate Beispiel-Sammlungen liegen NICHT unter `examples/`, gehören aber 
 
 ---
 
-## 9. Kritische Limitationen
+## 10. Kritische Limitationen
 
-Aus dem Code, dem `Practical_considerations.pdf` und dem Cenedese-2022-Paper rausgezogen:
+Aus dem Code, dem `Practical_considerations.pdf` und dem Cenedese-2022-Paper extrahiert:
 
-### 9.1 Autonomie ist Pflicht
-Die SSM-Theorie ist für **autonome** Systeme formuliert (Cabré-Fontich-de la Llave 2003 verlangt $\dot x = f(x)$ ohne explizite $t$-Abhängigkeit). SSMLearn bietet eine forced-Erweiterung (`forcedSSMROM.m`), die aber nur **schwache** Forcing-Terme behandelt: das Forcing wird **linear** in den normal-form-Koordinaten an die autonome SSM angeklebt. Bei großen Forcing-Amplituden wird die SSM nicht mehr eine Mannigfaltigkeit sondern ein bewegtes Objekt.
+### 10.1 Autonomie ist Pflicht
+Die SSM-Theorie ist für **autonome** Systeme formuliert (Cabré-Fontich-de la Llave 2003 verlangt $\dot x = f(x)$ ohne explizite $t$-Abhängigkeit). SSMLearn bietet eine forced-Erweiterung (`forcedSSMROM.m`), die aber nur **schwache** Forcing-Terme behandelt: das Forcing wird **linear** in den normal-form-Koordinaten an die autonome SSM angeklebt. Bei großen Forcing-Amplituden ist die SSM keine Mannigfaltigkeit mehr, sondern ein bewegtes Objekt.
 
-### 9.2 Fixpunkt im Ursprung
+### 10.2 Fixpunkt im Ursprung
 `IMGeometryGraphT0.m:5` setzt das hartcodiert. Bei nicht-trivialen Fixpunkten muss man die Daten zentrieren. Bei mehreren Fixpunkten (wie in `couetteflow`): explizit auf einen Fixpunkt zentrieren und den Trajectory-Branch wählen.
 
-### 9.3 Stationarität / keine Drift
+### 10.3 Stationarität / keine Drift
 SSMLearn nimmt implizit an, dass der Datensatz aus **Decay**- oder **steady-attractor**-Trajektorien besteht. Drift, Heteroskedastizität oder regimewechselnde Zeitreihen werden nicht modelliert. Es gibt **keine** Behandlung von Saisonalität, Trend oder strukturellen Brüchen.
 
-### 9.4 Beobachtbarkeit (Observable Choice)
+### 10.4 Beobachtbarkeit (Observable Choice)
 Die Wahl des Beobachterraums beeinflusst die Geometrie der SSM massiv:
 
 > "If the observables are directly the phase space coordinates, the leading principal components obtained by SVD might not align with the tangent space of the slow SSM. In these cases, we need to use the subsequent principal components that do align with the slow directions. Alternatively, switching to delay-embedded scalar observables also fixes this issue, as delay embedded slow SSMs tend to be flat."
 > — `docs/Practical_considerations.pdf` Seite 1, Punkt 5
 
-### 9.5 Datenmenge
+### 10.5 Datenmenge
 Es gibt keinen formellen Sample-Complexity-Satz. Empirisch: pro DoF-Mode braucht man eine Trajektorie die durch mindestens 3-5 Schwingungs-Perioden geht, mit ausreichender Auflösung um $\dot y$ via FD zu schätzen (i.e. min. 20-30 Sample/Periode).
 
-### 9.6 Polynom-Extrapolation
+### 10.6 Polynom-Extrapolation
 > "Extrapolating the polynomial vector field of the reduced dynamics to unseen regions of the phase space might produce badly behaved solutions. In these cases, alternative representations such as k-nearest neighbors (kNN) or radial basis functions (RBFs) might improve the extrapolation properties, as in Liu et al. *Chaos* 34 033140 (2024) and Xu et al. *J. Fluid Mech.* 987 R7 (2024)."
 > — `docs/Practical_considerations.pdf` Seite 1, Punkt 4
 
-### 9.7 Finite-Time-Blowup bei zu hoher Polynom-Ordnung
+### 10.7 Finite-Time-Blowup bei zu hoher Polynom-Ordnung
 > "If the reduced dynamics exhibits finite-time blowup, the polynomial order might need to be decreased."
 > — `docs/Practical_considerations.pdf` Seite 1, Punkt 3
 
-### 9.8 Normalform-Konvergenz
+### 10.8 Normalform-Konvergenz
 > "If the optimization finding the normal form reduced dynamics fails to converge, changing the initial guess might be required. This can be achieved by changing the 'IC_nf' argument of IMDynamicsFlow() from the default value of '0' to '1' or '2'."
 > — `docs/Practical_considerations.pdf` Seite 1, Punkt 6
 
-**Achtung — Manual nicht synchron mit dem Code:** Das PDF-Manual sagt der Default sei `0`, aber drei der vier `IMDynamics*`-Varianten setzen den Default auf **`1`**:
+**Achtung — Manual nicht synchron mit dem Code:** Das PDF-Manual sagt der Default sei `0`, aber drei der vier `IMDynamics*`-Varianten setzen den Default auf **`1`** (gegen den Code verifiziert):
 - `IMDynamicsFlow.m:403` → `'IC_nf', 1`
 - `IMDynamicsMech.m:382` → `'IC_nf', 1`
 - `IMDynamicsFlowFractional.m:195` → `'IC_nf', 1`
@@ -1202,17 +1274,34 @@ Es gibt keinen formellen Sample-Complexity-Satz. Empirisch: pro DoF-Mode braucht
 
 Das heißt: in `Flow`, `Mech` und `FlowFractional` startet die NF-Optimierung per Default schon mit dem cohomologischen Schätzer (`IC_nf=1`), in `Map` mit dem Zero-Start (`IC_nf=0`). Wenn die Konvergenz versagt, sind die verbleibenden Optionen je nach Variante `0`, `1` oder `2`. Diese Diskrepanz ist vermutlich auf einen Code-Patch nach Erstellung des Manuals zurückzuführen; das Manual wurde nicht synchron nachgezogen.
 
-### 9.9 Resonance-Detection
+### 10.9 Resonance-Detection
 Die Toleranz `tol_nf` ist heuristisch. Bei numerisch fast-resonanten Systemen kann eine zu kleine `tol_nf` zu instabilen Koeffizienten führen, eine zu große zu einem unter-bestimmten System. Default ist `1e-8` (`center_mfld`) bzw. `10*max(|Re(eig)|)` (`actual eigs`).
 
-### 9.10 Real-Eigenwerte = keine Normalform
+### 10.10 Real-Eigenwerte = keine Normalform
 Wenn die Linearisierung von $R$ reale Eigenwerte hat, fällt SSMLearn auf den Modal-Style zurück (`IMDynamicsFlow.m:162-163`). Der Normalform-Code unterstützt nur **rein oszillatorische** SSMs.
 
 ---
 
-## 10. Zur Python-Reimplementierung
+# Teil III — Python und Anwendung
 
-### 10.1 Minimaler Kern (zu portierende Dateien, mit Zeilen-Schätzung)
+## 11. Python: SSMLearnPy und Portierungs-Referenz
+
+### 11.1 SSMLearnPy (vorhandene offizielle Python-Implementierung)
+
+`/home/hz/Data/Attractor/SSMLearnPy/` ist die datengetriebene Python-Implementierung (Cenedese). Auf Platte verifiziert:
+- Paket `ssmlearnpy/` mit Modulen `geometry/`, `reduced_dynamics/`, `utils/`, `main/`, `base/`; dazu `tests/`, `examples/`, `docs/`.
+- README nennt dieselben drei Rechenschritte wie das MATLAB-README (Embedding → Parametrisierung/latente Koordinaten → reduzierte Dynamik) und: "with initial implementation of normal form transformation" — der Normalform-Teil ist in Python also weniger ausgebaut als in MATLAB.
+- Mitgelieferte Beispiele: oscillator chain, Brake-Reuss beam, vortex shedding, Couette flow, sloshing, 1-DoF-Oszillator.
+- Installation:
+  ```sh
+  git clone https://github.com/mattiacenedese/SSMLearnPy.git
+  cd SSMLearnPy/
+  conda create -n ssmlearn python=3.9   # optional
+  ```
+
+Die folgende Portierungs-Tabelle (ursprünglich als Spezifikation für eine Neuimplementierung geschrieben) dient damit als Referenz, um MATLAB-Features gegen SSMLearnPy zu prüfen bzw. fehlende Teile (v.a. Normalform, FRC-Continuation) nachzurüsten.
+
+### 11.2 Minimaler Kern (zu portierende Dateien, mit Zeilen-Schätzung)
 
 | Priorität | Datei | Zeilen | Python-Schwierigkeit | Notizen |
 |-----------|-------|--------|----------------------|---------|
@@ -1248,50 +1337,55 @@ Wenn die Linearisierung von $R$ reale Eigenwerte hat, fällt SSMLearn auf den Mo
 
 **Total Kern (Priorität 1):** ca. 2000 Zeilen MATLAB → in Python deutlich kompakter (geschätzt 800-1200 Zeilen mit numpy/scipy).
 
-### 10.2 Empfohlene Python-Bibliotheken
+### 11.3 Empfohlene Python-Bibliotheken
 - `numpy`, `scipy.linalg`, `scipy.optimize` (für `minimize` mit `SLSQP`/`trust-constr`).
 - `scipy.integrate.solve_ivp` (für `ode15s`-Ersatz, mit `BDF` oder `LSODA`).
 - `scipy.sparse` (für KKT-System der constrained ridge).
 - `sympy` (optional für symbolische Polynom-Generierung; alternativ direkt numpy).
 - Kein PyTorch nötig — die Optimierung ist klein-skalig und numerisch viel besser direkt mit `scipy` zu machen.
 
-### 10.3 Fallstricke
-- **MATLAB column-major vs numpy row-major.** Cell-Arrays werden zu list-of-tuples oder list-of-dicts.
-- **`fmincon` vs `scipy`:** `SLSQP` ist ein guter Ersatz für `fmincon` mit nichtlinearen Constraints, aber langsamer bei großen Problemen. Für hochdimensionalen Fall (`p >> 100`) eher `trust-constr`.
-- **Komplex-wertige Optimierung:** SSMLearn löst die Normalform-Optimierung in der Real/Imag-Aufspaltung des komplexen Koeffizienten-Vektors (Z. 377: `IC_opt = [real(IC_opt_complex); imag(IC_opt_complex)]`). Das sollte direkt portiert werden.
-- **Toleranzen:** `tol_nf=1e-8` ist sehr streng; bei verrauschten Daten muss das hochgesetzt werden.
+### 11.4 `fastSSM/fastSSM.m` als Portierungs-Vorlage
 
-### 10.4 Bonus: `fastSSM/fastSSM.m`
-Die Datei `fastSSM/fastSSM.m` (**122 Zeilen**) ist eine **eigenständige minimale Re-Implementation** des kompletten Stacks für **2D-SSMs** ($\text{mfddim} = 2$ hardcoded), verfasst von Joar Axås. Die SSM-Polynom-Ordnung ist über `mfdorder` als Eingabeparameter frei wählbar; ROM-Ordnung und Normalform-Ordnung sind fix bei `romorder = 3` und `nforder = 3` (`fastSSM.m:20`). Sie macht alles in einer Datei:
+Die Datei `fastSSM/fastSSM.m` (**122 Zeilen**, verfasst von Joar Axås) ist eine eigenständige minimale Re-Implementation des kompletten Stacks, ausschließlich für **2D-SSMs** ($\text{mfddim} = 2$ hardcoded). Die SSM-Polynom-Ordnung ist über den Eingabeparameter `mfdorder` frei wählbar; **fix hardcoded** sind hingegen ROM-Ordnung und Normalform-Ordnung (`romorder = 3`, `nforder = 3` in `fastSSM.m:20`). Sie macht alles in einer Datei:
 - SVD für Tangentialraum (Zeile 26-28).
 - Polynom-Regression für $W$ (Zeile 30-31).
 - FD-Differentiation (Zeile 35-38).
 - Polynom-Regression für $R$ (Zeile 39).
 - Diagonalisierung (Zeile 40-41).
-- **Analytische** Cohomological-Equation-Lösung Ordnung 2 und 3 (Zeile 45-67) — explizit ausgeschrieben mit den `2*ll-lj`, `ll+lc-lj`, `3*ll-lj`-Nennern!
+- **Analytische** Cohomological-Equation-Lösung Ordnung 2 und 3 (Zeile 45-67) — explizit ausgeschrieben mit den Resonanz-Nennern $2\lambda_\ell - \lambda_j$, $\lambda_\ell + \lambda_c - \lambda_j$, $3\lambda_\ell - \lambda_j$!
 - Backbone Curves (Zeile 78-100).
 
-Das ist die **beste Vorlage** für eine minimale Python-Implementation, weil sie keine externen Constraint-Solver braucht.
+Achtung: keine automatische Resonanzprüfung, keine Small-Denominator-Kontrolle, fest gewählte Gauge.
+
+Das ist die **beste Vorlage** für eine minimale Python-Implementation, weil sie keine externen Constraint-Solver braucht. Varianten im selben Ordner: `fastSSMMap.m` (diskrete Maps), `fastSSMplus.m` (höhere Ordnungen), `miniComputeFRC.m`.
+
+### 11.5 Fallstricke
+- **MATLAB column-major vs numpy row-major.** Cell-Arrays werden zu list-of-tuples oder list-of-dicts.
+- **`fmincon` vs `scipy`:** `SLSQP` ist ein guter Ersatz für `fmincon` mit nichtlinearen Constraints, aber langsamer bei großen Problemen. Für hochdimensionalen Fall (`p >> 100`) eher `trust-constr`.
+- **Komplex-wertige Optimierung:** SSMLearn löst die Normalform-Optimierung in der Real/Imag-Aufspaltung des komplexen Koeffizienten-Vektors (Z. 377: `IC_opt = [real(IC_opt_complex); imag(IC_opt_complex)]`). Das sollte direkt portiert werden.
+- **Toleranzen:** `tol_nf=1e-8` ist sehr streng; bei verrauschten Daten muss das hochgesetzt werden.
 
 ---
 
-## 11. Weitere Hinweise zur Anwendbarkeit auf BTC-log-Residuen
+## 12. Anwendbarkeit auf BTC-log-Residuen
 
-(Für den User, basierend auf den Limitations und Beispielen.)
+(Basierend auf den Limitationen und Beispielen.)
 
 1. **Stationaritäts-Annahme prüfen.** SSMLearn nimmt an, dass der Attraktor stabil und stationär ist. BTC-log-Residuen müssen vorher trend-bereinigt sein (was sie als Residuen ja vermutlich sind).
 2. **Fixpunkt im Ursprung herstellen.** Mittelwert subtrahieren.
 3. **Delay-Embedding ist Pflicht** wenn nur eine 1D-Zeitreihe vorliegt. Default $p \ge 2d+1$ — bei vermuteter $d=2$ also mindestens 5 Delay-Komponenten. $\tau$ aus Mutual-Information oder False-Nearest-Neighbours wählen (außerhalb von SSMLearn).
 4. **SSM-Dimension zuerst raten** ($d=2$ für Limit-Cycle-ähnlichen Attraktor; $d=4$ für Tori; $d>4$ vermutlich problematisch).
-5. **Strikte Trennung Train/Test.** SSMLearn hat das eingebaut (`indTrain`, `indTest`), aber für Finanz-Daten sollte das Out-of-Sample-Validation auf einer separaten Zeitperiode geschehen.
+5. **Strikte Trennung Train/Test.** SSMLearn hat das eingebaut (`indTrain`, `indTest`), aber für Finanz-Daten sollte die Out-of-Sample-Validation auf einer separaten Zeitperiode geschehen.
 6. **Polynom-Ordnung niedrig halten.** Empfehlung: $M=3-5$ für Geometrie, $M_R=3$ für Dynamik. Höher → finite-time-blowup-Risiko.
 7. **Validate via `conjugacyErrorTrend`** über Polynom-Ordnungen, um den optimalen Trade-off zu finden.
-8. **Wenn die Polynom-Regression schlecht extrapoliert:** RBF-Variante (siehe §9.6, Liu et al. 2024).
+8. **Wenn die Polynom-Regression schlecht extrapoliert:** RBF-Variante (siehe §10.6, Liu et al. 2024) oder Globalisierung via `globalized-SSM` (§2.5).
 9. **Inverted-flag-Beispiel** (`examples/invertedflag/chaotic_case.mlx`) ist der einzige Test-Case auf chaotischer Dynamik im Repo und sollte als Vorbild genommen werden.
+
+**Für den lokalen Workflow (`analyze_residuals/`, später `analyze_n_ens/`):** gezielt nur diese Dinge aus `SSMTool_jain` übernehmen (siehe §2.4) — Vorprüfungen, Resonanzlogik, Qualitätsdiagnostik, klare Workflow-Trennung (freie Dynamik / erzwungene Beiträge / Beobachtungsmodell). Alles andere würde nur Begriffe vermischen; ein Repo-Wechsel weg von SSMLearn/SSMLearnPy ist es nicht.
 
 ---
 
-## 12. Quellen-Index (Datei → Zweck Quick-Lookup)
+## 13. Quellen-Index (Datei → Zweck Quick-Lookup)
 
 ```
 PIPELINE STAGE                    KEY FILE                                              LINES
@@ -1344,7 +1438,7 @@ Backbone curves                   src/postprocessing/backboneCurves.m           
                                   src/postprocessing/backboneSurfaces.m                 150
 Forced response curves            src/postprocessing/computeFRC.m                       109
                                   src/postprocessing/analyticalFRC.m                    124
-                                  src/postprocessing/continuationFRCpo.m                126
+                                  src/postprocessing/continuationFRCpo.m               126
                                   src/postprocessing/continuationFRCep.m                369
                                   src/postprocessing/calibrateFRC.m                      24
                                   src/postprocessing/plotFRC.m                          110
@@ -1403,124 +1497,13 @@ fastSSM (alternative)             fastSSM/fastSSM.m                             
 
 ---
 
-## 13. Schluss
+## Anhang A: Aufgelöste Widersprüche
 
-Diese Datei dokumentiert den Workflow von SSMLearn (haller-group, Stand wie geklont in `/home/hz/Data/Attractor/SSMLearn/`). Jeder kritische Pipeline-Schritt ist mit Original-Kommentaren zitiert, und die Mathematik der Parametrisierungs-Methode (Cohomological Equation, Cabré-Fontich-de la Llave, Haller-Ponsioen) ist vollständig ausgeschrieben.
+Beim Zusammenführen gegen die Repos auf Platte verifiziert:
 
-Für die Anwendung auf BTC log-Residuen ist das Sloshing- oder Inverted-Flag-Beispiel der nächste strukturelle Verwandte. Eine minimale Python-Reimplementation kann sich an `fastSSM/fastSSM.m` orientieren (122 Zeilen, alles drin).
-
----
-
-## Anhang A: Funktions-Index (im Workflow-Text erwähnte `.m`-Dateien)
-
-Alphabetisch sortiert. Diese Liste enthält NUR die Funktionen, die im Workflow-Text dieser MD referenziert werden — sie ist keine vollständige Inventur des Repos (`SSMLearn/src/` enthält insgesamt 104 `.m`-Dateien mit ~136 `function`-Definitionen, von denen viele triviale Helfer sind).
-
-| Funktion | Pfad | Zweck |
-|----------|------|-------|
-| `add_slot_IP.m` | `src/postprocessing/cocoutils/` | COCO-Slot-Helper für Internal Phase Continuation |
-| `add_slot_Traj.m` | `src/postprocessing/cocoutils/` | COCO-Slot-Helper für Trajektorien-Sampling während Continuation |
-| `advect.m` | `src/utils/` | Vorwärts-Zeit-Integration einer Trajektorie auf einer fitten SSM (predict aus IC) |
-| `advectRD.m` | `src/utils/` | Vorwärts-Integration in reduzierten Koordinaten only |
-| `alignmentLinearConstraint.m` | `src/geometry/utilsGraphT0/` | Lineare Constraints für `fmincon` zur Erhaltung der Initial-Tangentialraum-Orientierung |
-| `analyticalFRC.m` | `src/postprocessing/` | Analytische Forced Response Curve für 2D-SSMs (Polar-Form-Lösung) |
-| `analyzeSpectr.m` | `src/preprocessing/` | Spektralanalyse einer Trajektorie (Peaks, Decays) |
-| `backboneCurves.m` | `src/postprocessing/` | Plot Amplitude-vs-Frequenz/Damping-Kurven aus normaler Form |
-| `backboneSurfaces.m` | `src/postprocessing/` | Backbone für 4D-SSMs als 2D-Surface in $(\rho_1,\rho_2)$ |
-| `calibrateFRC.m` | `src/postprocessing/` | Forced-Response-Kalibrierung aus Messdaten |
-| `coco_bd_labs_and_period.m` | `src/postprocessing/cocoutils/` | COCO-Helper: extrahiert Labels + Perioden aus bd-struct |
-| `cocoSet.m` | `src/utils/` | Setzt COCO-Optionen einheitlich (NTST, NCOL, PtMX, etc.) |
-| `computeAmpPhaseErrors.m` | `src/utils/` | Vergleicht Amplituden- und Phasen-Fehler zwischen Original und Rekonstruktion |
-| `computeFRC.m` | `src/postprocessing/` | Forced Response Curve via numerische COCO-Continuation |
-| `computeParametrizationErrors.m` | `src/utils/` | Reconstruction error (NMTE) für die SSM-Parametrisierung |
-| `computeTrajectoryErrors.m` | `src/utils/` | NMTE pro Trajektorie zwischen Original und SSM-Lift |
-| `conjugacyErrorTrend.m` | `src/reduceddynamics/` | Polynom-Order-Sweep zur Bestimmung der optimalen ROM-Ordnung |
-| `constrainedRidgeRegression.m` | `src/geometry/utilsGraphT0/` | Ridge-Regression unter Tangential-Constraint $V_e^\top H = 0$ |
-| `contFRC.m` | `src/utils/` | Wrapper für FRC-Continuation, dispatcht zwischen `continuationFRCep`/`po` |
-| `continuationFRCep.m` | `src/postprocessing/` | COCO-Equilibrium-Point-Continuation für FRC |
-| `continuationFRCpo.m` | `src/postprocessing/` | COCO-Periodic-Orbit-Continuation für FRC (für interne Resonanz) |
-| `convertLivescript2Markdown.m` | `src/utils/` | Konvertiert `.mlx`-Beispiele nach Markdown |
-| `coordinatesEmbedding.m` | `src/utils/` | Delay-Embedding mit $p = \lceil(2d+1)/n\rceil$ Kopien (Takens-Bound) |
-| `customFigure.m` | `src/` | Style-Helper für einheitliche Figures |
-| `defineNonlinConstraints.m` | `src/geometry/utilsGraphT0/` | Nichtlineare Constraints für `fmincon` (Tangentialraum-Orthogonalität, mit analytischem Gradient) |
-| `delayTangentSpace.m` | `src/geometry/utilsGraphT0/` | Tangentialraum-Konstruktion in Delay-Embedding-Koordinaten |
-| `DFT.m` | `src/preprocessing/` | Diskrete Fouriertransformation (Helfer) |
-| `dispNormalForm.m` | `src/reduceddynamics/utils/` | Tabellen-Anzeige der Normalform-Koeffizienten |
-| `dispNormalFormFigure.m` | `src/reduceddynamics/utils/` | LaTeX-Figure-Anzeige der NF-Gleichungen |
-| `DMD.m` | `src/preprocessing/` | Dynamic Mode Decomposition (Standalone) |
-| `dynamicsCoordChangeNF.m` | `src/reduceddynamics/` | Normalform-Optimierung in Real/Imag-Aufspaltung des komplexen Koeff-Vektors |
-| `eigSorted.m` | `src/reduceddynamics/utils/` | Sortiert Eigenwerte: cc+, real, cc-; Frequenz langsam → schnell |
-| `embedCoordinates.m` | `src/utils/` | Embedding mehrerer Trajektorien in einheitlichem Format |
-| `ep_reduced_results.m` | `src/utils/` | Equilibrium-Point-Resultate sammeln |
-| `errorAmplitudePhase.m` | `src/utils/` | Amplituden- und Phasen-Fehler-Statistik |
-| `extrasNonlinearConstraints.m` | `src/geometry/utilsGraphT0/` | Hilfs-Indizes für `defineNonlinConstraints` |
-| `fastSSM.m` | `fastSSM/` | Standalone-Re-Implementation des kompletten Stacks (122 Z., 2D-SSM, kubisch) |
-| `fastSSMMap.m` | `fastSSM/` | fastSSM-Variante für diskrete Maps |
-| `fastSSMplus.m` | `fastSSM/` | Erweiterte fastSSM mit höheren Ordnungen |
-| `finiteTimeDifference.m` | `src/utils/` | Finite-Differenzen-Ableitung von Trajektorien |
-| `fitRD2Data.m` | `src/utils/` | Fit reduzierter Dynamik an Daten (Wrapper) |
-| `fitSSM2Data.m` | `src/utils/` | Fit der SSM-Geometrie an Daten (Wrapper) |
-| `fMinimize.m` | `src/geometry/utilsGraphT0/` | Kostenfunktion für `fmincon` (Rekonstruktionsfehler $\sum_i \|x_i - V_e \eta_i - H \phi(\eta_i)\|^2$) |
-| `forcedSSMROM.m` | `src/timedependentmanifold/` | Time-dependent SSM für periodisch geforcte Systeme |
-| `functionFromTensors.m` | `src/utils/` | Polynomfunktion aus Tensor-Koeffizienten konstruieren |
-| `funToCell.m` | `src/utils/` | Function-Handle zu Cell-Array konvertieren |
-| `getManifoldPoint.m` | `src/utils/` | Lift eines reduzierten Punktes auf die SSM |
-| `getSSM.m` | `src/utils/` | Extrahiert SSM-Parametrisierung aus IMInfo |
-| `getSSMIC.m` | `src/utils/` | Initial Conditions auf der SSM für Trajektorien-Integration |
-| `IMDynamicsFlow.m` | `src/reduceddynamics/` | Hauptfunktion für reduzierte Flow-Dynamik (kontinuierlich); Default `IC_nf=1` |
-| `IMDynamicsFlowFractional.m` | `src/reduceddynamics/` | Flow mit fraktionaler Polynom-Basis (für non-smooth slaved) |
-| `IMDynamicsFlowParaCon.m` | `src/reduceddynamics/` | Flow mit Parameter-Continuation (Bifurkationsanalyse) |
-| `IMDynamicsMap.m` | `src/reduceddynamics/` | Reduzierte Map-Dynamik (diskret); einzige Variante mit Default `IC_nf=0` |
-| `IMDynamicsMapParaCon.m` | `src/reduceddynamics/` | Map mit Parameter-Continuation |
-| `IMDynamicsMech.m` | `src/reduceddynamics/` | Mech-spezifische Variante (halbiert Parameter durch $(u,v)$-Struktur) |
-| `IMGeometry.m` | `src/geometry/` | Top-Level-Wrapper für Geometrie-Fit, dispatcht zwischen GraphT0 und Para-Variante |
-| `IMGeometryGraphT0.m` | `src/geometry/` | Graph-Form-Fit $W = V_e \eta + H \phi(\eta)$ mit Tangential-Constraint |
-| `IMGeometryParaCon.m` | `src/geometry/` | Geometrie-Fit mit Parameter-Continuation |
-| `integrateFlows.m` | `src/utils/` | Integration mehrerer Trajektorien via `ode15s`, `RelTol=1e-4` |
-| `integrateTrajectories.m` | `src/utils/` | Wrapper für Trajektorien-Integration |
-| `iterateMap.m` | `src/reduceddynamics/utils/` | Trivialer Iterator für diskrete Maps |
-| `iterateMaps.m` | `src/utils/` | Map-Iteration für mehrere ICs |
-| `liftTrajectories.m` | `src/utils/` | Hebt reduzierte Trajektorien zurück auf die volle Phasenraum-Dimension |
-| `linearpart.m` | `src/utils/` | Extraktion des linearen Anteils von $f$ |
-| `modal_analysis.m` | `src/utils/` | Modale Analyse linearer Systeme |
-| `monitor_states.m` | `src/utils/` | Status-Monitoring für lange Läufe |
-| `multivariateExponents.m` | `src/utils/` | Generiert Multi-Index-Listen für Polynombasis |
-| `multivariateFractionalPolynomial.m` | `src/utils/` | Fraktionale Polynombasis $\phi$ |
-| `multivariatePolynomial.m` | `src/utils/` | Standard-Polynombasis $\phi(\eta) = [\eta_1^{m_1}\cdots\eta_d^{m_d}]_{|m|\le M}$ |
-| `multivariatePolynomialLinTransf.m` | `src/utils/` | Lineare Transformation von Polynom-Koeffizienten |
-| `multivariatePolynomialSelection.m` | `src/utils/` | Auswahl spezifischer Polynom-Terme (z.B. nur ungerade Ordnung) |
-| `obliqueProjection.m` | `src/preprocessing/` | Schiefe Projektion zur Tangentialraum-Schätzung (für oblique-Variante der Geometrie) |
-| `ode_2mDSSM_cartesian.m` | `src/utils/` | ODE-Wrapper für $2m$-D SSM in kartesischen Koordinaten |
-| `ode_2mDSSM_polar.m` | `src/utils/` | Polar-Form-ODE-Wrapper für $2m$-D SSM |
-| `orthogonalizeGramSchmidt.m` | `src/utils/` | Gram-Schmidt-Orthogonalisierung der Tangentialraum-Basis |
-| `paperFigure.m` | `src/utils/` | Style-Helper für Paper-Figures |
-| `PCA.m` | `src/utils/` | Principal Component Analysis (Standalone) |
-| `PFF.m` | `src/preprocessing/` | Power-Flow-Filter |
-| `PFFk.m` | `src/preprocessing/` | $k$-stufiger PFF |
-| `pickPointsOnHypersphere.m` | `src/utils/` | Sample-Punkte auf einer $n$-Sphäre für Initial-Conditions |
-| `pinkgreen.m` | `src/utils/` | Color-Map für SSM-Plots (Pink-Grün-Variante) |
-| `plot2DSSM.m` | `src/utils/` | 2D-SSM-Visualisierung |
-| `plotFRC.m` | `src/postprocessing/` | Plot-Helper für Forced Response Curves |
-| `plotModalTrajectories.m` | `src/utils/` | Plot von Modal-Koord-Trajektorien |
-| `plotReducedCoordinates.m` | `src/utils/` | Plot von reduzierten Koordinaten |
-| `plotSSMandTrajectories.m` | `src/utils/` | SSM + Trajektorien zusammen |
-| `plotSSMWithTrajectories.m` | `src/utils/` | Variante von `plotSSMandTrajectories` mit anderem Layout |
-| `plotTrajectories.m` | `src/utils/` | Standard-Trajektorien-Plot |
-| `polarNormalForm.m` | `src/reduceddynamics/utils/` | Konvertiert komplexe NF nach polar $(\rho,\theta)$, definiert `damps(\rho)`, `freqs(\rho)` |
-| `projectTrajectories.m` | `src/utils/` | Projektion von Trajektorien auf einen Subraum |
-| `purpleorange.m` | `src/utils/` | Color-Map (Purpur-Orange-Variante) |
-| `RBF_interpolator.m` | `src/utils/` | Radial-Basis-Function-Interpolation als Alternative zu Polynom-Regression (Liu et al. 2024) |
-| `rcoordinatesStandardization.m` | `src/utils/` | Standardisierung reduzierter Koordinaten |
-| `regimeLinear.m` | `src/preprocessing/` | Detektion des linearen Regimes (kleinster Amplitudenbereich) |
-| `RidgeRegressionConstrainedParametric.m` | `src/reduceddynamics/utils/` | Ridge mit parametrischen + fixed-point + linearpart Constraints |
-| `ridgeRegression.m` | `src/utils/` | Standard-Ridge-Regression-Helfer |
-| `showSpectrogram.m` | `src/preprocessing/` | Spektrogramm-Visualisierung |
-| `sliceTrajectories.m` | `src/utils/` | Schneidet Trajektorien in Sub-Intervalle |
-| `SSM_startTime.m` | `src/preprocessing/` | Spektrogramm-basierte Auto-Detektion der relevanten Trajektorien-Region und SSM-Dimension |
-| `SSMToolFRC.m` | `src/utils/` | FRC-Wrapper kompatibel mit SSMTool (extern) |
-| `SSMToolFRCFE.m` | `src/utils/` | FE-Variante des SSMTool-FRC-Wrappers |
-| `static_analysis.m` | `src/utils/` | Statische Analyse linearer Systeme |
-| `timeWeighting.m` | `src/utils/` | Zeit-abhängige Gewichtung für Slow-Manifold-Hervorhebung (Parameter $c_1, c_2$) |
-| `transformationComplexConj.m` | `src/utils/` | Reell ↔ komplex-konjugiert Koordinatenwechsel |
-| `transformationReIm.m` | `src/utils/` | Reell ↔ Real/Imag-Aufspaltung Koordinatenwechsel |
-| `transformTrajectories.m` | `src/utils/` | Allgemeine Trajektorien-Transformation |
-| `unravelField.m` | `src/utils/` | Unwinding eines Vektorfelds zu einer 1D-Liste |
+1. **Python-Implementierung:** Die ältere Doku war als Spezifikation für eine *noch zu schreibende* Python-Reimplementation formuliert. Auf Platte existiert `/home/hz/Data/Attractor/SSMLearnPy/` bereits (verifiziert: Paketmodule `geometry/`, `reduced_dynamics/`, `utils/`). Behalten: SSMLearnPy als vorhandene Implementierung (§11.1); die Portierungstabelle bleibt als Feature-Referenz.
+2. **Modellseiten-Doku:** Die neuere Datei verwies auf `SSMToolHaller_new.md` als "auszubauende Modellseite". Auf Platte existiert inzwischen `SSMToolHaller_merged.md` (zusammengeführte Fassung); Verweis entsprechend aktualisiert.
+3. **`PFF.m`:** Alt-interner Widerspruch — Funktions-Index nannte es "Power-Flow-Filter", die Detail-Sektion den Peak-Finding-and-Fitting-Algorithmus nach Jin/Chen/Brake/Song. Gegen den Code-Header von `src/preprocessing/PFF.m:1-13` verifiziert: die Jin-et-al.-Beschreibung ist korrekt (behalten, §5.1.8); die "Power-Flow-Filter"-Zeile war falsch (verworfen).
+4. **`getSSM.m`:** Alt-interner Widerspruch — Funktions-Index sagte "Extrahiert SSM-Parametrisierung aus IMInfo". Gegen den Code-Header verifiziert: `getSSM.m` "Generates a DynamicalSystem and an SSM for given tensors" (SSMtool-Bridge für $M,C,K,f_{nl}$). Behalten: Bridge-Beschreibung (§5.7, §2.2); Index-Zeile verworfen.
+5. **`IC_nf`-Default:** Manual (`Practical_considerations.pdf`) sagt Default `0`; Code verifiziert: `IMDynamicsFlow.m:403`, `IMDynamicsMech.m:382`, `IMDynamicsFlowFractional.m:195` haben `'IC_nf',1`, nur `IMDynamicsMap.m:344` hat `'IC_nf',0`. Behalten: Code-Stand, dokumentiert in §10.8.
+6. **Kein "neues SSMLearn":** Die neuere Datei ist autoritativ — `SSMTool_jain` ist kein SSMLearn-Nachfolger (gegen Repo-Struktur verifiziert: `DynamicalSystem`/`Manifold`/`SSM`-Klassen, `fnl_nonIntrusive.m`, `detect_resonant_modes.m` existieren wie beschrieben). Eingearbeitet in §2.
