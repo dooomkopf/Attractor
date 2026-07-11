@@ -1,40 +1,612 @@
-# SSMtool (Haller-Group, ETH Zürich) — Vollständige Workflow-Dokumentation
+> Zusammengeführt aus SSMToolHaller.md + SSMToolHaller_new.md (Stand 11.07.2026)
 
-Quelle: `/home/hz/Data/Attractor/SSMtool/` (geklont von `haller-group/SSMtool`)
-Manual: `/home/hz/Data/Attractor/SSMtool/SSMtool_manual.pdf` (Ponsioen & Haller, 1. März 2019, 15 Seiten)
-Stand der Software: SSMtool V1.0 (2017), Addendum_Isolas (17. Dezember 2018)
+# SSMTool (Haller-Gruppe, ETH Zürich) — V1.0, Addendum_Isolas und SSMTool 2.6
 
-Diese Datei beschreibt die Arbeitsweise von SSMtool maximal granular: jeden Schritt der Pipeline, jede Funktion, jede Datei, jede mathematische Bedingung, mit wörtlichen Code-Kommentaren als Belege. Sie ist als Checkliste gedacht, anhand derer Codex (zweite KI) die Vollständigkeit gegen Quelltext und Manual abgleichen kann.
-
----
-
-## 0. Inhaltsverzeichnis
-
-1. Was ist SSMtool und was ist eine Spectral Submanifold (SSM)
-2. Mathematischer Rahmen (Cabré-Fontich-de la Llave, Parametrization Method, Cohomologische Gleichungen)
-3. Inputs, die SSMtool zwingend erwartet
-4. Pipeline Schritt für Schritt mit Funktion + Code-Zitaten
-5. Datei-für-Datei-Inventar (`SSMtool/SSMtool/` und `Addendum_Isolas/`)
-6. Demos und Beispiele
-7. Outputs
-8. Limitationen
-9. Anwendbarkeit auf das LPPL-System des Users (`lpplattr02_ode.py`)
-10. Was der User MATLAB-seitig tun müsste — konkrete Checkliste
+Quellen:
+- SSMtool V1.0 + Addendum_Isolas: `/home/hz/Data/Attractor/SSMtool/` (geklont von `haller-group/SSMtool`); Stand: V1.0 (2017), Addendum_Isolas (17. Dezember 2018)
+- Manual V1.0: `/home/hz/Data/Attractor/SSMtool/SSMtool_manual.pdf` (Ponsioen & Haller, 1. März 2019, 15 Seiten)
+- SSMTool 2.6 (Jain / Li / Haller): `/home/hz/Data/Attractor/SSMTool_jain/`; `git log -n 1`: `de6cbc7 SSMTool 2.6`
+- Datengetriebene Gegenfamilie: `/home/hz/Data/Attractor/SSMLearnPy/`
 
 ---
 
-## 1. Was ist SSMtool und was ist eine Spectral Submanifold
+## Inhaltsverzeichnis
 
-### 1.1 Definition (Haller & Ponsioen 2016)
+**Teil I — Grundlagen und Einordnung**
+1. Was ist eine Spectral Submanifold (SSM)
+2. Versionen, Repos und Größenvergleich
+3. Modellbasiert vs. datengetrieben (SSMTool vs. SSMLearn)
 
-Eine **Spectral Submanifold (SSM)** über einem Spektral-Subraum $\mathcal{E}$ eines hyperbolischen Fixpunktes ist die **glatteste, eindeutige nichtlineare Fortsetzung** dieses Subraums. Sie ist invariant unter dem Fluss, tangential an $\mathcal{E}$ im Fixpunkt, und ihre Glattheit ist höher als jede andere invariante Mannigfaltigkeit, die $\mathcal{E}$ tangential berührt.
+**Teil II — SSMTool 2.6 (`SSMTool_jain`)**
+4. Einordnung und Kernarchitektur
+5. Unterstützte Systemtypen
+6. Installation und kanonischer API-Workflow
+7. Autonomer Kernworkflow
+8. Nichtautonomer Kernworkflow
+9. FRC-Workflow
+10. FRS, Ridges/Trenches und Stabilitätsdiagramme
+11. Continuation, COCO und externe Abhängigkeiten
+12. Diagnostik und Gültigkeitsprüfung
+13. Outputs (2.6)
+14. Delta-Liste: Was gegenüber V1.0 wirklich neu ist
+
+**Teil III — SSMtool V1.0 + Addendum_Isolas**
+15. Zweck und mathematischer Rahmen (V1.0)
+16. Inputs, die V1.0 zwingend erwartet
+17. Pipeline Schritt für Schritt (V1.0)
+18. Datei-für-Datei-Inventar
+19. Demos und Beispiele
+20. Outputs (V1.0 + Addendum)
+21. Limitationen (V1.0)
+22. Ungewöhnliches und Unterspezifiziertes (V1.0)
+23. Code-Pfad-Cheat-Sheet (V1.0)
+
+**Teil IV — Anwendbarkeit auf lokale Arbeit**
+24. LPPL-System (`lpplattr02_ode.py`) gegen die V1.0-Voraussetzungen
+25. MATLAB-Checkliste für ein vereinfachtes LPPL-Modell
+26. Transfergrenzen für BTC/Residuen und Empfehlung
+
+**Anhänge**
+- A. Manual-Schlüsselzitate (V1.0)
+- B. Referenzen
+- C. Funktions-Index V1.0 + Addendum
+- D. Ausbaureihenfolge der 2.6-Dokumentation
+
+---
+
+# Teil I — Grundlagen und Einordnung
+
+## 1. Was ist eine Spectral Submanifold (SSM)
+
+Definition (Haller & Ponsioen 2016): Eine **Spectral Submanifold (SSM)** über einem Spektral-Subraum $\mathcal{E}$ eines hyperbolischen Fixpunktes ist die **glatteste, eindeutige nichtlineare Fortsetzung** dieses Subraums. Sie ist invariant unter dem Fluss, tangential an $\mathcal{E}$ im Fixpunkt, und ihre Glattheit ist höher als jede andere invariante Mannigfaltigkeit, die $\mathcal{E}$ tangential berührt.
 
 Formal: Sei $\dot{x} = f(x)$ ein autonomes glattes ODE-System mit asymptotisch stabilem Fixpunkt $x_0$, $A = Df(x_0)$ semisimpel. $\mathcal{E} \subset \mathbb{R}^n$ sei ein $A$-invarianter Spektral-Unterraum (aufgespannt von einer Teilmenge der Eigenvektoren). Eine SSM $\mathcal{W}(\mathcal{E})$ ist eine glatte invariante Mannigfaltigkeit, sodass:
 - $T_{x_0}\mathcal{W}(\mathcal{E}) = \mathcal{E}$
 - $\mathcal{W}(\mathcal{E})$ ist klassen-$C^r$ glatt mit $r$ größer als der Smoothness aller anderen $\mathcal{E}$-tangentialen invarianten Mannigfaltigkeiten (Eindeutigkeit modulo dieser Smoothness-Bedingung)
 - Existenz und Eindeutigkeit folgen aus dem **Cabré-Fontich-de la Llave-Theorem** (CFdlL, 2003), das ein Spektralgap und Non-Resonanz fordert.
 
-### 1.2 Was SSMtool konkret macht
+## 2. Versionen, Repos und Größenvergleich
+
+### 2.1 Versionshistorie
+
+- **SSMtool V1.0 (2017)**: nur autonome 2D-SSMs für mechanische Systeme. GUI-getrieben.
+- **Addendum_Isolas (Dezember 2018)**: MATLAB-Skripte (KEIN GUI) zur Berechnung **zeit-periodisch geforcierter** 2D-SSMs (autonomer Anteil $W_0$ + linearer Anteil $W_1$ in der Forcierungs-Amplitude $\epsilon$), Forced Response Curves (FRC) und **Isolas** (isolierte Antwortkurven).
+- **SSMtool 2.0**: im V1.0-Manual als „kommendes Release 2019" angekündigt, im alten Repo nicht enthalten.
+- **SSMTool 2.6 (Jain / Li / Haller)**: lokal als `/home/hz/Data/Attractor/SSMTool_jain/` vorhanden; objektorientierte Plattform, in der V1.0 nur noch ein Spezialfall ist.
+
+Manual S. 14 (Ankündigung des Forced-Release):
+> "We would like to note that the future release of SSMtool will be able to handle the time-dependent periodic forcing case as explained in [3]. This will allow you to extract forced response curves corresponding to vibration modes of interest for different forcing amplitudes, in an even more numerically efficient way. Additionally, and due to the use of SSM theory, it will be possible to detect isolated regions in the forced response curves."
+> — `SSMtool_manual.pdf:14`
+
+### 2.2 Größe und Struktur
+
+| Repo | Größe | Dateien | Charakter |
+|---|---:|---:|---|
+| `SSMtool` | `16M` | `91` | kleine GUI-zentrierte Toolbox V1.0 plus Addendum |
+| `SSMTool_jain` | `273M` | `3363` | große Plattform mit OOP-Kern, vielen Beispielen und vendorten Abhängigkeiten |
+
+Top-Level von `SSMTool_jain`:
+- `src/`
+- `examples/`
+- `ext/`
+- `install.m`
+
+Wichtige Teilbäume:
+- `src/@DynamicalSystem/`
+- `src/@Manifold/`
+- `src/@SSM/`
+- `src/misc/`
+- `ext/coco/`
+- `ext/YetAnotherFEcode/`
+- `ext/tensor_toolbox/`
+- `ext/torus_collocation/`
+- `ext/Wrappers/`
+
+Praktische Folge: ein großer Teil der Repo-Größe kommt von **COCO**, **FE-Code**, **Tensor-Toolbox** und Beispielen — nicht vom eigentlichen SSM-Kern.
+
+## 3. Modellbasiert vs. datengetrieben (SSMTool vs. SSMLearn)
+
+| Eigenschaft | SSMtool (Ponsioen & Haller 2017) | SSMLearn (Haller-Gruppe ab 2021) |
+|---|---|---|
+| Datenquelle | analytisches/symbolisches ODE-Modell, $M, C, K, f_{nl}$ | Trajektoriendaten (numerisch oder Experiment) |
+| Methode | Parametrization Method, Polynomiale Reihen | Manifold Learning + Polynom-Regression |
+| Modell-Voraussetzung | Mechanisches System $M\ddot{y} + C\dot{y} + Ky + g(y,\dot y) = 0$ explizit | Keine — nur Trajektorien |
+| Output | Symbolische SSM-Polynome $W(z)$, $R(z)$, Backbone | Numerische SSM-Polynome, FRC, Backbone |
+
+SSMtool **ist nicht data-driven**. Wer nur Trajektorien hat, muss SSMLearn benutzen.
+
+Die beiden Familien im Vergleich:
+
+- `SSMLearnPy` arbeitet so: Daten → Embedding → reduzierte Koordinaten / Manifold Learning → reduzierte Dynamik-Fits.
+  - Beleg: `/home/hz/Data/Attractor/SSMLearnPy/README.md`
+- `SSMTool_jain` arbeitet so: bekanntes Modell → lineare Spektralanalyse → Masterraumwahl → Parametrization Method → analytische / semi-analytische reduzierte Dynamik.
+
+Auch `non-intrusive` im neuen Repo ist **nicht** SSMLearn-äquivalent:
+- es bleibt modellbasiert,
+- nur die Nichtlinearität muss nicht als expliziter Polynomtensor vorliegen.
+
+Deshalb: `SSMTool_jain` ist eine neue **modellbasierte** Generation, nicht die neue **datengetriebene** Generation.
+
+Ergänzung 2026:
+- Das lokal vorhandene Repo `/home/hz/Data/Attractor/globalized-SSM/` sitzt methodisch **hinter** beiden Ansätzen.
+- Es benutzt vorhandene lokale SSM-Repräsentationen, um sie per **Padé-Approximation** oder **rationaler Regression** zu globalisieren.
+- Für SSMtool bedeutet das konkret: die aus der Parametrization Method erhaltenen Taylor-Koeffizienten sind nicht zwingend Endprodukt, sondern können als Ausgangsbasis für eine globalere rationale Darstellung dienen.
+
+---
+
+# Teil II — SSMTool 2.6 (`SSMTool_jain`)
+
+## 4. Einordnung und Kernarchitektur
+
+### 4.1 Einordnung
+
+`SSMTool_jain` ist weiterhin eine **modellbasierte** SSM-Toolbox.
+
+Es ist **nicht**:
+- eine neue SSMLearn-Version,
+- keine datengetriebene Manifold-Learning-Pipeline,
+- keine reine GUI-Toolbox.
+
+Es ist eine objektorientierte MATLAB-Plattform zur Berechnung von:
+- SSMs,
+- reduzierter Dynamik,
+- Backbone-Kurven,
+- FRC/FRS,
+- Stabilitätsdiagrammen,
+- Torus-/Quasi-Periodik-Workflows,
+- mit expliziten Pfaden für interne Resonanzen,
+- und mit intrusiven, semi-intrusiven und non-intrusiven Modellrepräsentationen.
+
+Die wichtigste konzeptionelle Änderung gegenüber V1.0:
+
+> Das neue Repo ist eine **allgemeine SSM-Plattform**.
+> Das alte Repo war primär eine **kleine 2D-SSM-Toolbox für mechanische Systeme** mit GUI und Addendum.
+
+### 4.2 Die drei Hauptklassen
+
+Der eigentliche Rechenkern sitzt auf drei Klassen:
+
+1. `DynamicalSystem`
+   - Datei: `/home/hz/Data/Attractor/SSMTool_jain/src/@DynamicalSystem/DynamicalSystem.m`
+   - beschreibt das Vollsystem
+   - kann first-order oder second-order sein
+   - enthält lineare Teile, Nichtlinearitäten, Forcing und Spektraldaten
+
+2. `Manifold`
+   - Datei: `/home/hz/Data/Attractor/SSMTool_jain/src/@Manifold/Manifold.m`
+   - verwaltet Spektralunterraum `E`, Resonanzdaten und die eigentliche Mannigfaltigkeitsberechnung
+   - Hauptmethoden:
+     - `choose_E(...)`
+     - `compute_whisker(...)`
+     - `compute_perturbed_whisker(...)`
+     - `compute_auto_invariance_error(...)`
+     - `compute_analyticity_domain(...)`
+
+3. `SSM`
+   - Datei: `/home/hz/Data/Attractor/SSMTool_jain/src/@SSM/SSM.m`
+   - erbt von `Manifold`
+   - kapselt Anwendungs-Workflows:
+     - `extract_backbone(...)`
+     - `extract_FRC(...)`
+     - `extract_FRS(...)`
+     - `extract_ridges_trenches(...)`
+     - `extract_Stability_Diagram(...)`
+     - diverse Continuation-/Sweep-Routinen
+
+### 4.3 Options-Klassen
+
+Das Repo hat explizite Options-Objekte:
+- `/home/hz/Data/Attractor/SSMTool_jain/src/DSOptions.m`
+- `/home/hz/Data/Attractor/SSMTool_jain/src/ManifoldOptions.m`
+- `/home/hz/Data/Attractor/SSMTool_jain/src/FRCOptions.m`
+- `/home/hz/Data/Attractor/SSMTool_jain/src/FRSOptions.m`
+
+Echter Unterschied zu V1.0: nicht mehr GUI-States und verstreute Flags, sondern programmatische Konfiguration.
+
+## 5. Unterstützte Systemtypen
+
+### 5.1 First-order und second-order
+
+`DynamicalSystem` unterstützt explizit beide Fälle:
+
+- second-order:
+  - `M xdd + C xd + K x + fnl(x,xd) = fext(t)`
+- first-order:
+  - `B zdot = F(z) + Fext(t)`
+
+Beleg: Kommentarblock in `/home/hz/Data/Attractor/SSMTool_jain/src/@DynamicalSystem/DynamicalSystem.m`
+
+Das ist eine klare Erweiterung gegenüber V1.0, das methodisch und dokumentativ stark second-order/mechanical zentriert war.
+
+### 5.2 Drei Nichtlinearitätsmodi
+
+`DynamicalSystem` trennt:
+
+- intrusive
+  - `fnl`, `dfnl`, `F`, `dF`
+- semi-intrusive
+  - `fnl_semi`, `dfnl_semi`, `F_semi`, `dF_semi`
+- non-intrusive
+  - `fnl_non`, `dfnl_non`, `F_non`, `dF_non`
+
+Wichtig: `non-intrusive` heißt hier **nicht** datengetrieben, sondern weiter modellbasiert, nur ohne klassische explizite Tensoreingabe.
+
+### 5.3 Externe Forcierung
+
+Forcing wird über `DynamicalSystem.add_forcing(...)` eingebracht. Das sieht man in vielen Beispielen:
+- `/home/hz/Data/Attractor/SSMTool_jain/examples/OscillatorChain/OscillatorChain.m`
+- `/home/hz/Data/Attractor/SSMTool_jain/examples/BernoulliBeam/BernoulliBeam.m`
+
+Die nichtautonomen Workflows bauen darauf auf.
+
+## 6. Installation und kanonischer API-Workflow
+
+Installation: `/home/hz/Data/Attractor/SSMTool_jain/install.m`
+
+`install.m` macht im Kern:
+- `run ext/coco/startup.m`
+- `addpath` für `combinator`
+- `addpath` für `tensor_toolbox`
+- `addpath` für `YetAnotherFEcode`
+- `addpath` für `torus_collocation`
+- `addpath` für `ext/Wrappers`
+- `addpath` für `src` und `src/misc`
+
+Der typische Nutzungsstil in den Beispielen:
+
+1. `run ../../install.m`
+2. Modell erzeugen
+3. `DS = DynamicalSystem(DSorder);`
+4. Matrizen/Nichtlinearität/Forcing setzen
+5. `DS.linear_spectral_analysis();`
+6. `S = SSM(DS);`
+7. `S.choose_E(masterModes);`
+8. autonom oder nichtautonom weiterrechnen
+
+Belege:
+- `/home/hz/Data/Attractor/SSMTool_jain/examples/OscillatorChain/OscillatorChain.m`
+- `/home/hz/Data/Attractor/SSMTool_jain/examples/BernoulliBeam/BernoulliBeam.m`
+- `/home/hz/Data/Attractor/SSMTool_jain/examples/NACAWing/NACAWing_NonIntrusive.m`
+
+### 6.1 Kanonischer API-Workflow auf einer Seite
+
+Der kleinste echte Nutzungsablauf des neuen Repos:
+
+```matlab
+run ../../install.m
+
+DS = DynamicalSystem(DSorder);
+set(DS, ...);                 % M/C/K/fnl oder A/B/F oder non-intrusive Handles
+DS.add_forcing(...);          % optional
+
+[V,D,W] = DS.linear_spectral_analysis();
+
+S = SSM(DS);
+set(S.Options, ...);
+S.choose_E(masterModes);
+
+[W_0,R_0] = S.compute_whisker(order);                 % autonom
+[W_1,R_1] = S.compute_perturbed_whisker(order-1,...); % nichtautonom
+
+BB  = S.extract_backbone(masterModes,omegaRange,order);
+FRC = S.extract_FRC('freq',omegaRange,order);
+```
+
+Die wichtigste Umstellung gegenüber V1.0 ist genau hier sichtbar: kein GUI-Button-Workflow, sondern ein expliziter API-Pfad mit Objekten und Methoden.
+
+## 7. Autonomer Kernworkflow
+
+### 7.1 System aufbauen
+
+Beispiele liefern meist ein `build_model.m`, etwa:
+- `/home/hz/Data/Attractor/SSMTool_jain/examples/TwoOscillators/build_model.m`
+- `/home/hz/Data/Attractor/SSMTool_jain/examples/CharneyDeVore1stOrder/build_model.m`
+
+Danach:
+- `DS = DynamicalSystem(DSorder);`
+- `set(DS, ...)`
+
+Beispiele:
+- second-order mechanisch:
+  - `set(DS,'M',M,'C',C,'K',K,'fnl',fnl);`
+- non-intrusive:
+  - `set(DS,'M',M,'C',C,'K',K,'fnl_non',fnl);`
+  - `set(DS.Options,'Intrusion','none')`
+
+### 7.2 Spektralanalyse
+
+Lineare Analyse läuft über:
+- `/home/hz/Data/Attractor/SSMTool_jain/src/@DynamicalSystem/linear_spectral_analysis.m`
+
+Wichtige Punkte dort:
+- kleine Systeme: `eig(A)` oder `eig(A,B)`
+- große Systeme: `eigs(...)`
+- Sortierung nach Realteil / Imaginärteil
+- positive Imaginärteile werden in komplexen Paaren zuerst angeordnet
+- Normierung von `V` und `W`
+- Spektrum wird in `obj.spectrum` gespeichert
+
+Das ist wesentlich systematischer als in V1.0.
+
+### 7.3 Masterraumwahl und Resonanzanalyse
+
+Masterraumwahl:
+- `/home/hz/Data/Attractor/SSMTool_jain/src/@Manifold/choose_E.m`
+
+`choose_E(...)` macht zwei Dinge:
+- setzt `obj.E.spectrum`, `obj.E.basis`, `obj.E.adjointBasis`
+- führt `resonance_analysis(...)` aus
+
+Die Resonanzanalyse liefert:
+- `resonance.outer`
+- `resonance.inner`
+- `sigma_out`
+- `sigma_in`
+
+Das ist stärker formalisiert als in V1.0: Resonanzprüfung ist jetzt ein explizites Objekt des Workflows, nicht nur ein Randcheck vor der SSM-Berechnung.
+
+### 7.4 Autonome SSM-Berechnung
+
+Autonomer Kern:
+- `/home/hz/Data/Attractor/SSMTool_jain/src/@Manifold/compute_whisker.m`
+
+Logik:
+- lineare Startterme:
+  - `Lambda_E = obj.E.spectrum`
+  - `W_01 = obj.E.basis`
+- danach ordnungsweise Rekursion:
+  - `cohomological_solution(...)`
+
+Repräsentationen:
+- `tensor`
+- `multiindex`
+
+Großer Unterschied zu V1.0: der neue Code unterstützt mehrere interne Darstellungsformen, V1.0 war viel direkter und enger verdrahtet.
+
+### 7.5 Backbone-Kurven
+
+Backbone-Workflow:
+- `/home/hz/Data/Attractor/SSMTool_jain/src/@SSM/extract_backbone.m`
+
+Tatsächliche Reihenfolge:
+1. `obj.choose_E(modes)`
+2. `obj.compute_whisker(order(end))`
+3. `compute_gamma(R0)`
+4. `frc_ab(...)`
+5. `compute_output_polar2D(...)`
+6. `plot_FRC(...)`
+
+Einschränkung:
+- analytische Backbone-Berechnung ist auf **2D-SSMs** ausgelegt
+- `assert(numel(modes)==2, ...)`
+
+Wichtiger Punkt: obwohl das Repo insgesamt höherdimensionale resonante Fälle kann, bleibt der klassische analytische Backbone-Pfad eng an 2D gebunden.
+
+## 8. Nichtautonomer Kernworkflow
+
+### 8.1 Zentrale Funktion
+
+Nichtautonomer Kern:
+- `/home/hz/Data/Attractor/SSMTool_jain/src/@Manifold/compute_perturbed_whisker.m`
+
+Diese Funktion berechnet:
+- `W1` — nichtautonome SSM-Koeffizienten
+- `R1` — nichtautonome reduzierte Dynamik
+
+Sie ist der eigentliche Nachfolger des alten Addendum-Denkens, aber jetzt als Kernfunktion des Repos.
+
+### 8.2 Bedeutung
+
+`compute_perturbed_whisker(...)` erweitert den autonomen Fall um:
+- periodische oder quasi-periodische Forcierung,
+- Fourier-Indizes `kappa`,
+- Ordnung in `epsilon`,
+- nichtautonome Beiträge in SSM und reduzierter Dynamik.
+
+Das ist kein Add-on mehr, sondern integraler Bestandteil vieler FRC-/FRS-Pfade.
+
+### 8.3 First-order und second-order Varianten
+
+Intern verzweigt der Code nach Systemtyp:
+- `nonAut_1stOrder_whisker(...)`
+- `nonAut_2ndOrder_whisker(...)`
+
+Damit ist die nichtautonome Infrastruktur nicht mehr nur mechanisches Spezialzubehör.
+
+## 9. FRC-Workflow
+
+### 9.1 Top-Level
+
+Haupteinstieg:
+- `/home/hz/Data/Attractor/SSMTool_jain/src/@SSM/extract_FRC.m`
+
+`extract_FRC(...)` macht:
+1. lineares Spektrum sicherstellen
+2. resonante Eigenwerte im Frequenzbereich finden
+3. resonante Moden und interne Resonanzen bestimmen
+4. geeigneten SSM konstruieren
+5. FRC per Level-Set oder Continuation berechnen
+6. Ergebnis in physikalische Koordinaten zurückführen und plotten
+
+### 9.2 Drei Rechenwege
+
+`extract_FRC(...)` verzweigt nach Methode:
+- `level set`
+- `continuation ep`
+- `continuation po`
+
+Kerneinstiege:
+- `/home/hz/Data/Attractor/SSMTool_jain/src/@SSM/FRC_level_set.m`
+- `/home/hz/Data/Attractor/SSMTool_jain/src/@SSM/FRC_cont_ep.m`
+- `/home/hz/Data/Attractor/SSMTool_jain/src/@SSM/FRC_cont_po.m`
+
+### 9.3 Was `FRC_level_set` tatsächlich macht
+
+`FRC_level_set(...)` ist der analytischste FRC-Pfad:
+
+1. `choose_E(resModes)`
+2. `compute_whisker(max_order)`
+3. autonome Koeffizienten `gamma` und `lambda` bestimmen
+4. Gitter in Polar-Koordinaten aufbauen
+5. je nach `contribNonAuto`
+   - führenden oder höheren nichtautonomen Beitrag via `compute_perturbed_whisker(...)` einbeziehen
+6. reduzierte 2D-Polardynamik auswerten
+7. Fixpunkte der reduzierten Dynamik bestimmen
+8. Stabilität prüfen
+9. Antwort zurück in physikalische Koordinaten ausgeben
+
+Das ist deutlich mehr als das alte V1.0-Backbone-Schema.
+
+### 9.4 Rolle interner Resonanzen
+
+`extract_FRC(...)` und die zugehörigen privaten Helfer behandeln interne Resonanzen systematisch:
+- resonante Moden erkennen
+- `mFreqs` bestimmen
+- ggf. höhere SSM-Dimension verwenden
+
+Zentraler Unterschied zur V1.0-Welt: interne Resonanz ist nicht nur Warnung, sondern konstitutiver Teil des Workflows.
+
+## 10. FRS, Ridges/Trenches und Stabilitätsdiagramme
+
+### 10.1 Forced Response Surface
+
+Datei:
+- `/home/hz/Data/Attractor/SSMTool_jain/src/@SSM/extract_FRS.m`
+
+Workflow:
+1. Resonanzkonsistenz prüfen
+2. `choose_E(modes)`
+3. `compute_whisker(order)`
+4. autonome reduzierte Dynamik auf interne Resonanzkonsistenz prüfen
+5. führende nichtautonome Beiträge über `compute_perturbed_whisker(0,...)`
+6. Datenstruktur für reduzierte Dynamik aufbauen
+7. entweder analytisch oder via 2D-Continuation FRS berechnen
+
+Wichtig: das ist nicht nur "mehr FRC", sondern eine echte 2-Parameter-Oberfläche.
+
+### 10.2 Ridges und Trenches
+
+Datei:
+- `/home/hz/Data/Attractor/SSMTool_jain/src/@SSM/extract_ridges_trenches.m`
+
+Workflow:
+1. Resonanzprüfung
+2. `choose_E(...)`
+3. `compute_whisker(order)`
+4. nichtautonome führende Beiträge berechnen
+5. COCO-kompatibles reduziertes Vektorfeld konstruieren
+6. Optimierungs-/Amplitude-Objekt definieren
+7. Continuation über Damped Backbone / Resonanzrücken
+8. Ergebnisse zurück in den Vollraum mappen
+
+Das existiert im alten Repo so nicht.
+
+### 10.3 Stabilitätsdiagramme
+
+Datei:
+- `/home/hz/Data/Attractor/SSMTool_jain/src/@SSM/extract_Stability_Diagram.m`
+
+Workflow:
+1. `choose_E(resModes)`
+2. `compute_whisker(order)`
+3. je nach Einstellung:
+   - nichtautonome ROM-Abhängigkeit direkt oder sensitivitätsbasiert behandeln
+4. COCO-Problem aufsetzen
+5. Bifurkationen wie `PD` oder `SN` detektieren und fortsetzen
+
+Das ist weit jenseits dessen, was V1.0 praktisch als Hauptworkflow bot.
+
+## 11. Continuation, COCO und externe Abhängigkeiten
+
+### 11.1 COCO ist Kerninfrastruktur
+
+Das neue Repo nutzt COCO nicht bloß randständig:
+- `ext/coco/` ist vendorisiert
+- viele FRC-/FRS-/Stability-/Torus-Pfade bauen darauf auf
+
+Beispiele:
+- `SSM_epSweeps`
+- `SSM_poSweeps`
+- `SSM_lvlSweeps`
+- `SSM_isol2ep`
+- `SSM_isol2po`
+- `SSM_TR2tor`
+
+### 11.2 Weitere große Abhängigkeiten
+
+Wichtige externe Pakete:
+- `YetAnotherFEcode`
+- `tensor_toolbox`
+- `torus_collocation`
+- `Wrappers`
+
+Praktische Folge: die Repo-Größe ist nicht direkt mit "Kernlogik" gleichzusetzen; ein großer Teil ist Infrastruktur für FE, Continuation und Hochdimensionalität.
+
+## 12. Diagnostik und Gültigkeitsprüfung
+
+Das neue Repo hat eigene Prüfpfade, die V1.0 in dieser Form nicht als klaren Workflowblock hatte:
+
+- `/home/hz/Data/Attractor/SSMTool_jain/src/@Manifold/compute_auto_invariance_error.m`
+- `/home/hz/Data/Attractor/SSMTool_jain/src/@Manifold/compute_analyticity_domain.m`
+- `/home/hz/Data/Attractor/SSMTool_jain/src/@Manifold/compuate_invariance_residual.m`
+- `/home/hz/Data/Attractor/SSMTool_jain/src/@Manifold/compute_sensitivity_coefficients.m`
+
+Praktisch bedeuten diese Funktionen:
+- Invarianzfehler der berechneten SSM explizit auswerten
+- Gültigkeits-/Analytizitätsbereich abschätzen
+- Residuen der Invarianzgleichung berechnen
+- Sensitivität der reduzierten Dynamik und SSM-Koeffizienten bestimmen
+
+Für die lokale Arbeit ist das einer der wertvollsten Unterschiede zum alten Repo: nicht nur `W` und `R` berechnen, sondern deren Vertrauensbereich und Fehlermaß explizit denken.
+
+## 13. Outputs (2.6)
+
+Die wichtigsten Output-Familien:
+
+- autonome SSM und ROM: `W_0`, `R_0`
+- nichtautonome SSM und ROM: `W_1`, `R_1`
+- Backbone: `BB`
+- Forced Response Curves: `FRC`
+- Forced Response Surfaces: FRS-Daten über `extract_FRS`
+- ridges/trenches: über `extract_ridges_trenches`
+- Stabilitätsdiagramme: `SD`
+
+Wichtig für die Interpretation:
+- `compute_whisker` und `compute_perturbed_whisker` liefern die **Kernkoeffizienten**
+- `extract_*`-Methoden liefern bereits **anwendungsnahe Auswertungen**
+- viele dieser Outputs werden zusätzlich in physikalische Koordinaten zurückgemappt
+
+Die Ebene ist also klar getrennt: erst Mannigfaltigkeit und reduzierte Dynamik, dann beobachtbare Kurven, Flächen, Stabilitätsgrenzen.
+
+## 14. Delta-Liste: Was gegenüber V1.0 wirklich neu ist
+
+1. **Objektmodell statt GUI-zentrierter Hauptfunktion**
+   - alt: `compute_SSM.m`
+   - neu: `DynamicalSystem` + `Manifold` + `SSM`
+2. **First-order-Systeme zusätzlich zu second-order**
+3. **Nichtautonome SSMs als Kernworkflow** — nicht mehr nur Addendum-Charakter
+4. **Interne Resonanzen als systematischer Hauptpfad**
+5. **Forced Response Surfaces** — nicht nur FRC
+6. **Ridges/Trenches**
+7. **Stabilitätsdiagramme / Ince-Strutt-artige Workflows**
+8. **Torus-/Quasi-Periodik-Workflows**
+9. **Nicht-intrusive und semi-intrusive Modellpfade**
+10. **Explizite Invarianz- und Analytizitätsdiagnostik**
+    - `compute_auto_invariance_error`
+    - `compute_analyticity_domain`
+11. **Große FE-/COMSOL-orientierte Infrastruktur**
+
+Kurz:
+
+> `SSMTool_jain` ist keine V1.1, sondern eher eine Plattform, in der V1.0 nur noch ein Spezialfall ist.
+
+---
+
+# Teil III — SSMtool V1.0 + Addendum_Isolas
+
+## 15. Zweck und mathematischer Rahmen (V1.0)
+
+### 15.1 Was SSMtool V1.0 konkret macht
 
 SSMtool ist eine MATLAB-Implementierung der **Parametrization Method** zur Berechnung **zweidimensionaler** SSMs in autonomen, dissipativen mechanischen Systemen mit beliebig vielen Freiheitsgraden. Die SSM wird als formale Taylor-Reihe um den Fixpunkt konstruiert; die reduzierte Dynamik auf der SSM ergibt ein 2D-ODE in Polar-Koordinaten, aus dem **Backbone-Kurven** (Amplitude vs. instantane Frequenz) abgelesen werden.
 
@@ -46,37 +618,7 @@ Manual S. 4:
 > "Under appropriate non-resonance conditions, we can construct a two-dimensional autonomous SSM, $\mathcal{W}(\mathcal{E})$, over a chosen spectral subspace $\mathcal{E}$ as an embedding of a two-dimensional open set $\mathcal{U}$ into the full phase space of the system via a mapping $W(z)$. This mapping is approximated in a neighborhood of the origin using a Taylor expansion in the parametrization coordinates $z \in \mathbb{C}^2$."
 > — `SSMtool_manual.pdf:4`
 
-### 1.3 Unterschied SSMtool vs. SSMLearn
-
-| Eigenschaft | SSMtool (Ponsioen & Haller 2017) | SSMLearn (Haller-Gruppe ab 2021) |
-|---|---|---|
-| Datenquelle | analytisches/symbolisches ODE-Modell, $M, C, K, f_{nl}$ | Trajektoriendaten (numerisch oder Experiment) |
-| Methode | Parametrization Method, Polynomiale Reihen | Manifold Learning + Polynom-Regression |
-| Modell-Voraussetzung | Mechanisches System $M\ddot{y} + C\dot{y} + Ky + g(y,\dot y) = 0$ explizit | Keine — nur Trajektorien |
-| Output | Symbolische SSM-Polynome $W(z)$, $R(z)$, Backbone | Numerische SSM-Polynome, FRC, Backbone |
-
-SSMtool **ist nicht data-driven**. Wer nur Trajektorien hat, muss SSMLearn benutzen.
-
-Ergänzung 2026:
-- Das lokal vorhandene Repo `/home/hz/Data/Attractor/globalized-SSM/` sitzt methodisch **hinter** beiden Ansätzen.
-- Es benutzt vorhandene lokale SSM-Repräsentationen, um sie per **Padé-Approximation** oder **rationaler Regression** zu globalisieren.
-- Für SSMtool bedeutet das konkret: die aus der Parametrization Method erhaltenen Taylor-Koeffizienten sind nicht zwingend Endprodukt, sondern können als Ausgangsbasis für eine globalere rationale Darstellung dienen.
-
-### 1.4 SSMtool, SSMtool 2.0 und Addendum_Isolas
-
-- **SSMtool V1.0 (2017)**: Nur autonome 2D-SSMs für mechanische Systeme. GUI-getrieben.
-- **Addendum_Isolas (Dezember 2018)**: MATLAB-Skripte (KEIN GUI) zur Berechnung **zeit-periodisch geforcierter** 2D-SSMs (autonomer Anteil $W_0$ + linearer Anteil $W_1$ in der Forcierungs-Amplitude $\epsilon$), Forced Response Curves (FRC) und **Isolas** (isolierte Antwortkurven).
-- **SSMtool 2.0**: im Manual als „kommendes Release 2019" angekündigt, im Repo nicht enthalten.
-
-Manual S. 14:
-> "We would like to note that the future release of SSMtool will be able to handle the time-dependent periodic forcing case as explained in [3]. This will allow you to extract forced response curves corresponding to vibration modes of interest for different forcing amplitudes, in an even more numerically efficient way. Additionally, and due to the use of SSM theory, it will be possible to detect isolated regions in the forced response curves."
-> — `SSMtool_manual.pdf:14`
-
----
-
-## 2. Mathematischer Rahmen — vollständig ausgeschrieben
-
-### 2.1 Mechanisches System (Eingangsform)
+### 15.2 Mechanisches System (Eingangsform)
 
 SSMtool erwartet ein autonomes $n$-Freiheitsgrad-System der Form:
 
@@ -94,7 +636,7 @@ mit:
 > "where $y \in \mathbb{R}^n$ is the generalized position vector; $M = M^T \in \mathbb{R}^{n \times n}$ is the positive definite mass matrix; $C = C^T \in \mathbb{R}^{n \times n}$ is the damping matrix; $K = K^T \in \mathbb{R}^{n \times n}$ is the stiffness matrix and $g(y,\dot{y})$ denotes all the nonlinear terms in the system. These nonlinearities are assumed to be analytic for simplicity. Additionally, we require that the trivial fixed point of system (1.1) is asymptotically stable."
 > — `SSMtool_manual.pdf:4`
 
-### 2.2 First-order-Form (intern)
+### 15.3 First-order-Form (intern)
 
 Mit $x = (y, \dot y)^T \in \mathbb{R}^{2n}$ wird das System auf erste Ordnung gebracht:
 
@@ -110,7 +652,7 @@ In `SSM.m:409`:
 fnl = [sym(zeros(numel(q),1));-M\f];
 ```
 
-### 2.3 Voraussetzungen für die Existenz der SSM (Cabré-Fontich-de la Llave, 2003)
+### 15.4 Voraussetzungen für die Existenz der SSM (Cabré-Fontich-de la Llave, 2003)
 
 Für einen autonomen, glatten Fluss $\dot x = f(x)$ mit $f(x_0)=0$ und $A = Df(x_0)$ existiert über jedem $A$-invarianten Spektral-Unterraum $\mathcal{E}$ eine eindeutige glatte invariante Mannigfaltigkeit, sofern die folgenden Bedingungen alle erfüllt sind:
 
@@ -183,7 +725,7 @@ Wenn eine innere Resonanz erkannt wird, wird das Flag `int_res = 1` gesetzt und 
 #### (E) Glattheit
 $f$ analytisch (oder mindestens $C^r$ für genügend großes $r$). Manual fordert explizit Analytizität (S. 4: „These nonlinearities are assumed to be analytic for simplicity.").
 
-### 2.4 Parametrization Method — Invariance Equation
+### 15.5 Parametrization Method — Invariance Equation
 
 Wir suchen eine Einbettung $W: \mathbb{C}^2 \supset \mathcal{U} \to \mathbb{R}^{2n}$ und eine reduzierte Dynamik $R: \mathbb{C}^2 \to \mathbb{C}^2$, sodass die **Invarianzgleichung**
 
@@ -208,7 +750,7 @@ Die **Backbone-Kurve** ist die Beziehung
 $$\Omega(\rho_0) = b(\rho_0)$$
 ausgewertet an verschiedenen Amplituden $\rho_0$. Die instantane Frequenz hängt von der Amplitude ab — das ist die Definition der nichtlinearen Resonanzkurve eines dissipativen Systems.
 
-### 2.5 Polynomieller Ansatz — formale Reihen
+### 15.6 Polynomieller Ansatz — formale Reihen
 
 Schreibe $W$ und $R$ als Taylor-Reihen in $z = (z_1, z_2)$:
 $$W(z) = \sum_{|m|\ge 1} W_m\, z_1^{m_1} z_2^{m_2}, \qquad R(z) = \sum_{|m|\ge 1} R_m\, z_1^{m_1} z_2^{m_2}.$$
@@ -219,7 +761,7 @@ Die linearen Anteile sind festgelegt:
 
 Die höheren Koeffizienten $W_m, R_m$ ($|m| \ge 2$) werden ordnungsweise aus den **cohomologischen Gleichungen** bestimmt.
 
-### 2.6 Cohomologische Gleichungen (ordnungsweise)
+### 15.7 Cohomologische Gleichungen (ordnungsweise)
 
 Setze die Reihen in $DW \cdot R = F \circ W$ ein und sortiere nach Polynomgrad. Bei Grad $k$ ergibt sich:
 
@@ -275,7 +817,7 @@ K{n} = K_n;
 
 `spmd` ist MATLABs Single-Program-Multiple-Data-Block für Parallel-Toolbox: Die Polynomkoeffizienten werden auf die verfügbaren CPU-Kerne aufgeteilt.
 
-### 2.7 Behandlung resonanter Terme (Normalform-Style)
+### 15.8 Behandlung resonanter Terme (Normalform-Style)
 
 Für jeden Polynomindex $(m_1, m_2)$ und jede Master-Mode $j \in E$ gilt: Wenn der Nenner
 $$\mathcal{L}_{k,j,(m_1,m_2)} = \lambda_j - m_1\lambda_1 - m_2\lambda_2$$
@@ -309,7 +851,7 @@ Damit wird die reduzierte Dynamik **automatisch in Normalform** geschrieben: $R(
 
 **Wichtig**: SSMtool benutzt also einen **gemischten Normal-Form-Style**: Wenn keine Resonanz, dann reine Graph-Form ($R$ bleibt linear); wenn Resonanz, dann werden die resonanten Terme in $R$ verschoben. Bei lightly-damped Systemen (typisch für Mechanik) gibt es fast immer near-inner-Resonanzen, deshalb ist der Defaultpfad fast immer der Normal-Form-Style.
 
-### 2.8 Backbone-Kurven aus der Polar-Form
+### 15.9 Backbone-Kurven aus der Polar-Form
 
 Mit $z_1 = \rho \cos\theta + i \rho \sin\theta = \rho e^{i\theta}$ (oder als Realwert-Paar) folgt aus $\dot z = R(z)$:
 $$\dot\rho = \alpha(\rho)\cos\theta + \beta(\rho)\sin\theta, \qquad \dot\theta = \frac{1}{\rho}(\beta(\rho)\cos\theta - \alpha(\rho)\sin\theta)$$
@@ -333,7 +875,7 @@ else
 end  
 ```
 
-### 2.9 Forced Response und Isolas (Addendum_Isolas)
+### 15.10 Forced Response und Isolas (Addendum_Isolas)
 
 Für ein Forcing $\epsilon F_\phi(\Omega t)$ wird das System
 $$\dot x = Ax + F_{nl}(x) + \epsilon F_\phi(\Omega t)$$
@@ -382,11 +924,9 @@ Fimp_m = (b-omega).*rho + epsilon.*(g1.*(1-Km.^2)./(1+Km.^2)-g2.*(2.*Km)./(1+Km.
 
 Stabilität wird per Jacobi der gemittelten Dynamik berechnet (Code-Abschnitte ab `ex_SP_W0_5_W1_5.m:687`).
 
----
+## 16. Inputs, die V1.0 zwingend erwartet
 
-## 3. Inputs, die SSMtool zwingend erwartet
-
-### 3.1 Form: mechanisches System mit $M, C, K, f$
+### 16.1 Form: mechanisches System mit $M, C, K, f$
 
 SSMtool akzeptiert NUR mechanische Systeme zweiter Ordnung. Es erwartet (Manual S. 8, Tabelle 2.1):
 
@@ -408,7 +948,7 @@ if isfield(struct,'M') && isfield(struct,'C')  && isfield(struct,'K') && isfield
 
 **Alternativ** kann der User die Matrizen direkt im GUI eintippen (`SSM.m:380-407`).
 
-### 3.2 Was SSMtool NICHT akzeptiert
+### 16.2 Was SSMtool NICHT akzeptiert
 - Generelle First-Order-ODEs $\dot x = f(x)$ ohne mechanische Struktur — müssen erst in $M\ddot y + \ldots$ gebracht werden.
 - Numerische $f$-Funktionshandle — die Nichtlinearität muss **symbolisch** angegeben werden (für die Taylor-Entwicklung via `taylor()` in `compute_SSM.m:25,34`).
 - Zeitabhängige $f(x,t)$ — V1 ist autonom-only.
@@ -423,7 +963,7 @@ end
 ```
 Der Fixpunkt MUSS am Ursprung liegen. Wenn nicht, muss der User VOR Übergabe an SSMtool $x \to x - x_0$ verschieben.
 
-### 3.3 Auswahl-Inputs aus dem GUI
+### 16.3 Auswahl-Inputs aus dem GUI
 - **Master-Spektral-Subraum**: zwei Eigenwerte aus der Liste der berechneten $\lambda$, manuell vom User markiert (`SSM.m:482`, `push_select_lambda_Callback`). Mehr als 2 oder weniger als 2 sind nicht erlaubt:
 ```matlab
 if numel(getValues) < 2    
@@ -447,11 +987,9 @@ txt = 'Chosen order of SSM expansion is lower than the spectral quotient plus on
 - **Output-Koordinaten**: `Modal` / `Physical` / `Complex` — Radio-Buttons. Bestimmt, in welcher Basis die Output-Polynome ausgegeben werden.
 - **Check for higher-order internal resonances**: Checkbox; wenn gesetzt, werden Resonanz-Tests bis zur SSM-Ordnung statt nur bis $\sigma$ gemacht.
 
----
+## 17. Pipeline Schritt für Schritt (V1.0)
 
-## 4. Pipeline Schritt für Schritt
-
-Diese Sektion ist die **Kernreferenz**. Jeder Schritt referenziert die ausführende Funktion und die wichtigsten Code-Zeilen.
+Jeder Schritt referenziert die ausführende Funktion und die wichtigsten Code-Zeilen.
 
 ### Schritt 0: GUI-Initialisierung
 - Datei: `SSM.m`, Funktion: `SSM_OpeningFcn` (`SSM.m:48-117`)
@@ -463,8 +1001,7 @@ Diese Sektion ist die **Kernreferenz**. Jeder Schritt referenziert die ausführe
   1. Predefined example via Dropdown (`popup_load_example_Callback`, `SSM.m:1590`) — lädt `Examples/2DOF_inner_res.mat`, `Examples/2DOF_outer_res.mat` oder `Examples/beam.mat`.
   2. Custom `.mat`-File via Browse-Button (`push_loadmech_Callback`, `SSM.m:1128`).
   3. Manuelle GUI-Eingabe der Matrizen (Felder `input_mass`, `input_damping`, `input_stiffness`, `input_nonlinear`, `input_pos`, `input_vel`).
-- Manual S. 6:
-(abridged, Auslassungen explizit markiert)
+- Manual S. 6 (abridged, Auslassungen explizit markiert):
 > "To load an autonomous mechanical system into SSMtool, there is a total of three options. The first option is to load a predefined mechanical system from the drop-down list in the top-left corner of the GUI […Detailtext zu Option 1 ausgelassen…] The second option is to define your mechanical system in the predefined input windows […Detailtext zu Option 2 ausgelassen…] The third and last option available is to load a custom mechanical system from a .mat file containing the variables listed in Table 2.1"
 > — `SSMtool_manual.pdf:6-7`
 
@@ -550,7 +1087,7 @@ end
 Hier wird `combinator(2,i,'p','r')` benutzt — Permutationen mit Repetition; das gibt $2^i$ Indextupel. Das ist eine **redundante** Darstellung (nicht $\binom{i+1}{1}$ wie nsumk), die aber mit den Kronecker-Produkt-Strukturen in `kronGK`, `kronKR`, `nkron` kompatibel ist.
   6. **Baue Nichtlinearitäts-Matrizen $G_m$** mit `matGV2(f, spv, T, order)` (`compute_SSM.m:61`).
      - `matGV2.m` liest aus dem symbolischen $f$ alle Monomial-Beiträge, identifiziert deren Ordnung, baut sparse Matrizen $G_m$ und transformiert sie in die modale Basis: `G{i} = T\Gcoef*nkron(i,T);` (`matGV2.m:76`).
-     - Kommentar im Code: `% Building up matrices` (Statusmessage `matGV2.m:6`).
+     - Statusmessage: `% Building up matrices` (`matGV2.m:6`).
   7. **Lokalisiere innere Resonanzen** in `loc_R` (`compute_SSM.m:72-95`).
   8. **Schleife über Polynom-Ordnung $n=2,\ldots,\text{order}$** (`compute_SSM.m:100-169`):
      - Berechne den diagonalen Anteil $\mathcal{L}_n$.
@@ -615,11 +1152,9 @@ range = id(labindex)+ 1:id(labindex+1);
 end
 ```
 
----
+## 18. Datei-für-Datei-Inventar
 
-## 5. Datei-für-Datei-Inventar
-
-### 5.1 `SSMtool/SSMtool/` — Hauptverzeichnis (V1.0, GUI-getrieben)
+### 18.1 `SSMtool/SSMtool/` — Hauptverzeichnis (V1.0, GUI-getrieben)
 
 #### GUI-Files
 - **`SSM.m`** (1784 Zeilen) — Haupt-GUI. Enthält alle Callback-Funktionen für Buttons, Inputs, Dropdowns. Funktion `SSM` öffnet das GUI; `push_compute_Callback` ruft `compute_SSM` auf.
@@ -632,7 +1167,7 @@ end
 - **`SSM_invar.fig`** — Layout.
 
 #### Kern-Computation
-- **`compute_subspace.m`** (49 Zeilen) — Bildet $A$ in First-order-Form, eigendekomposition, Sortierung, Stabilitäts-Check.
+- **`compute_subspace.m`** (49 Zeilen) — Bildet $A$ in First-order-Form, Eigendecomposition, Sortierung, Stabilitäts-Check.
   - Signatur: `function [lambda_out,T,A] = compute_subspace(M,C,K,scaling,conservative)`
 - **`orderT.m`** (90 Zeilen) — Ordnet Eigenvektor-Spalten so, dass der Master-Subraum die ersten 2 Spalten besetzt; baut auch die modale Basis-Matrix `Tmodal` mit reellen Spalten für komplex-konjugierte Paare.
   - Signatur: `function [handles_out] = orderT(A,handles)`
@@ -692,7 +1227,7 @@ end
 - **`Examples/2DOF_outer_res.mat`** — 2-DOF Shaw-Pierre-System mit near-outer-Resonanz.
 - **`Examples/beam.mat`** — 16-Element diskretisierter nichtlinearer Timoshenko-Beam (Phasenraum-Dimension 32).
 
-### 5.2 `Addendum_Isolas/` — Isolas-Erweiterung (2018, kein GUI)
+### 18.2 `Addendum_Isolas/` — Isolas-Erweiterung (2018, kein GUI)
 
 - **`startup.m`** — Adds `core/`, `example_beam/`, `example_SP/` zum MATLAB-Pfad.
 
@@ -737,11 +1272,9 @@ fnl = [gamma_3*x3^3+gamma_5*x3^5+kappa*x1^3;0];
 > ```
 - **`ex_beam_W0_3_W1_0.m`** (≈600 Zeilen) — Wie `ex_SP_W0_3_W1_0.m`, aber für den Beam.
 
----
+## 19. Demos und Beispiele
 
-## 6. Demos und Beispiele
-
-### 6.1 GUI-Predefined-Examples (`SSMtool/SSMtool/Examples/`)
+### 19.1 GUI-Predefined-Examples (`SSMtool/SSMtool/Examples/`)
 
 #### Example 1: `2DOF_inner_res.mat` — 2-DOF Shaw-Pierre near-INNER-resonance
 - 2 Massen, 3 lineare Federn, kubische Nichtlinearität an Mass 1.
@@ -760,7 +1293,7 @@ fnl = [gamma_3*x3^3+gamma_5*x3^5+kappa*x1^3;0];
 - Charakterisiert in Ponsioen et al. 2018 Sec. 7.3.
 - **Demonstriert**: SSMtool auf Systemen mit moderat hoher Dimension.
 
-### 6.2 Addendum-Skripte (NICHT in GUI integriert)
+### 19.2 Addendum-Skripte (NICHT in GUI integriert)
 
 #### `Addendum_Isolas/example_SP/ex_SP_W0_3_W1_0.m`
 - 2-DOF Shaw-Pierre, $W_0$ bis Ordnung 3, **kein** $W_1$ — nur autonomer Backbone als Sanity-Check.
@@ -774,24 +1307,22 @@ fnl = [gamma_3*x3^3+gamma_5*x3^5+kappa*x1^3;0];
 #### `Addendum_Isolas/example_beam/ex_beam_W0_3_W1_0.m`
 - Bernoulli-Beam mit kubischer Endfeder, FE-Diskretisierung.
 
-### 6.3 Was im Repo NICHT vorhanden ist
+### 19.3 Was im alten Repo NICHT vorhanden ist
 - 3D-ODE-Beispiele (alle Demos sind mechanische 2-DOF oder höhere mit gerader Dimension).
 - Slow/fast-Kopplungs-Demos.
 - Nicht-mechanische ODE-Beispiele.
 - SSMs der Dimension > 2 (V1.0 ist hardcoded auf 2D-SSMs).
 
----
+## 20. Outputs (V1.0 + Addendum)
 
-## 7. Outputs
-
-### 7.1 Was SSMtool nach `Compute SSM` ablegt
+### 20.1 Was SSMtool nach `Compute SSM` ablegt
 
 In `Data/run_<timestamp>/`:
 - **`SSM_function_<timestamp>.m`** — auto-generierte MATLAB-Funktion `[q_1,q_2,...,q_{2n}] = SSM_function_<ts>(z1,z2)`. Das ist die Polynomdarstellung von $W(z_1,z_2)$ im gewählten Output-Koordinatensystem (modal/physical/complex).
 - **`R_function_<timestamp>.m`** — auto-generierte Funktion `[zd_1,zd_2] = R_function_<ts>(z1,z2)`. Das ist die reduzierte Dynamik $R(z_1,z_2)$.
 - **`sys_<timestamp>.mat`** — Snapshot der `sys`-Struktur ($M$, $C$, $K$, $f$, $\lambda$, $T$, etc.) für spätere Reproduktion.
 
-### 7.2 GUI-Sichtbare Outputs
+### 20.2 GUI-sichtbare Outputs
 - **Polynom-Ausdrücke** für $W(z)$ und $R(z)$ als Text im "SSM Parameterization"-Fenster (Manual Fig. 2.7, S. 11).
 - **3D-Surface-Plot** der SSM in physikalischen Koordinaten — projiziert auf 3 wählbare Koordinaten.
 - **Reduced Dynamics in Polar-Form**: $\dot\rho = a(\rho)$, $\dot\theta = b(\rho)$.
@@ -799,16 +1330,14 @@ In `Data/run_<timestamp>/`:
 - **Trajektorien-Vergleich**: 3D-Plot der reduzierten und vollen Trajektorie auf der SSM (Manual Fig. 2.10).
 - **Invarianz-Fehler**: skalare Zahl $\delta_{\text{inv}}$.
 
-### 7.3 Outputs aus dem Addendum (Isolas)
+### 20.3 Outputs aus dem Addendum (Isolas)
 - **`mech_sys_isola.m`**, **`mech_sys_isola_dx.m`**, **`mech_sys_isola_dp.m`** — auto-generierte Funktionen für die gemittelte (slow-flow) Dynamik und ihre Jacobi-Matrizen, geeignet als Input für Continuation-Tools wie COCO.
 - **Konturplot** $G(\rho, \Omega) = 0$ in der $(\Omega, \rho)$-Ebene — zeigt FRC und Isolas.
 - **Stabilitätsklassifikation** der Lösungen via Jacobi-Eigenwerte.
 
----
+## 21. Limitationen (V1.0)
 
-## 8. Limitationen (kritisch und vollständig)
-
-### 8.1 Strukturelle Limitationen (V1.0)
+### 21.1 Strukturelle Limitationen
 1. **Nur mechanische Systeme**. Die Eingabe verlangt $M, C, K, f$. Generelle First-Order-ODEs müssen vom User in mechanische Form gebracht werden. Falls das nicht möglich ist (z. B. weil es keine kanonische Position-Velocity-Aufspaltung gibt), ist SSMtool nicht direkt anwendbar.
 2. **Nur 2D-SSMs**. Hardcoded — `K1 = [eye(2);zeros(sys_dim-2,2)]` (`compute_SSM.m:47`) macht aus dem Master-Subraum genau 2 Spalten. Höher-dimensionale SSMs (z. B. 4D für Bursting-Modes) sind nicht berechenbar.
 3. **Nur autonom**. Forcing wird im V1.0 NICHT unterstützt; das Addendum_Isolas ist eine separate Skript-Sammlung, kein integrierter GUI-Pfad.
@@ -819,7 +1348,7 @@ In `Data/run_<timestamp>/`:
 8. **Master-Subraum muss aus genau 2 Eigenwerten bestehen**: entweder ein komplex-konjugiertes Paar oder zwei reelle Eigenwerte, aber nicht ein reeller plus die Hälfte eines komplexen Paares (`orderT.m:81-87`).
 9. **Maximum SSM-Ordnung ist 50** (`SSM.m:575-579`).
 
-### 8.2 Numerische und praktische Limitationen
+### 21.2 Numerische und praktische Limitationen
 10. **Symbolische Taylor-Entwicklung** der Nichtlinearität via `taylor()` skaliert schlecht mit $n$ und Ordnung. Für $n \approx 30$ und Ordnung $\ge 5$ wird das Symbolic-Toolbox-Setup zum Bottleneck.
 11. **Speicherbedarf**: Die Polynomdarstellung in `compute_SSM.m` benutzt redundante $2^k$-Indizierung statt der minimalen $\binom{k+1}{1}$-Indizierung. Für Ordnung 10 und 2 Variablen sind das 1024 Koeffizienten pro Mode und Ordnung statt 11.
 12. **Externe Resonanz-Toleranz $10^{-4}$** ist hardcoded. Bei knapp resonanten Systemen kann das zu falsch-positiven Abbrüchen führen.
@@ -828,178 +1357,26 @@ In `Data/run_<timestamp>/`:
 15. **Parallel-Toolbox-API-Abhängigkeit**: Das Manual sagt explizit, dass paralleles Rechnen **nicht erforderlich** ist. Der Code ruft aber dennoch direkt `gcp`, `parallel.defaultClusterProfile`, `parcluster`, `parpool` (`SSM.m:674-686`) und `spmd` (`compute_SSM.m:141, 157-163`) auf. Korrekte Formulierung: **mehrere Worker sind nicht nötig**, aber die Parallel-Computing-Toolbox muss installiert sein, weil diese API-Aufrufe sonst fehlschlagen. Ohne installierte Toolbox crasht der Aufruf, auch wenn ein einzelner Worker für die Rechnung ausreichen würde.
 16. **Dateimanagement-Side-effects**: SSMtool schreibt `cs.mat`, `cluster_info.mat`, `Data/run_<ts>/`, `R_sub_function.m`, `R_sub_EM_function.m`, `res_function.m`, `system_function.m` ins MATLAB-Working-Directory. Jeder neue Lauf überschreibt diese Files — kein sauberes Multi-Tenant-Verhalten.
 
-### 8.3 Was die Pipeline NICHT prüft
+### 21.3 Was die Pipeline NICHT prüft
 - Konvergenz der Reihe in einer **konkreten** Umgebung — nur die Existenz von Termen wird garantiert.
 - Globale Eigenschaften der SSM (sie ist nur lokal definiert).
 - Robustheit gegenüber Parameter-Störungen oder Modellfehlern.
 
----
+(Vergleich: SSMTool 2.6 adressiert einen Teil davon explizit über `compute_auto_invariance_error`, `compute_analyticity_domain`, `compuate_invariance_residual`, `compute_sensitivity_coefficients` — siehe Abschnitt 12.)
 
-## 9. Anwendbarkeit auf das LPPL-System des Users
+## 22. Ungewöhnliches und Unterspezifiziertes (V1.0)
 
-### 9.1 Das System (`/home/hz/Data/LPPL-forced/LPPL-attractor/lpplattr02_ode.py`)
+1. **Hardcoded 2D-Master-Dimension**: Die Variable `nvar = 2` ist überall im Code fest verankert. Eine Verallgemeinerung auf 4D, 6D etc. erfordert nicht-triviale Code-Änderungen in `compute_SSM.m`, `kronKR.m`, `kronGK.m`.
+2. **Redundante $2^k$-Polynombasis** statt $\binom{k+1}{1}$ — verschwendet Speicher, aber vereinfacht die Kronecker-Produkt-Algebra.
+3. **`spmd`-Pflicht**: SSMtool versucht implizit, einen Parallel-Pool zu starten. Wenn das fehlschlägt (z. B. ohne Parallel Toolbox), bricht der Lauf bei `cluster = load('cluster_info.mat')` ab, weil die Datei noch nicht existiert.
+4. **Side-effects ins Working-Directory**: SSMtool legt mehrere Dateien im aktuellen MATLAB-Pfad ab (`cs.mat`, `cluster_info.mat`, auto-generierte `.m`-Files). Mehrere parallele SSMtool-Instanzen würden sich gegenseitig überschreiben.
+5. **`SSM.m` mischt GUI-Code (GUIDE-generiert) mit Numerik-Aufrufen** — unsauber, aber lauffähig.
+6. **Manual ist sehr knapp** (15 Seiten) und bezieht sich für die Mathematik fast vollständig auf das JSV-2018-Paper [2]. Dieses Paper ist die eigentliche Referenz für alle Formeln; das Manual ist nur ein Bedienungs-Tutorial.
+7. **Die "complex coordinates"-Option** in `SSM.m:594-597` ist nur teilweise dokumentiert — sie liefert die SSM in den komplexen Master-Koordinaten ohne Rück-Transformation.
+8. **Numerische Stabilität** bei Ordnung > 10 ist nicht garantiert; das `round(...,17)` in `compute_SSM.m:177-178` ist ein primitiver Filter.
+9. **Keine Unit-Tests, keine Validierungs-Suite** im Repo. Die Korrektheit wird allein durch die Predefined-Examples und die Veröffentlichung in J. Sound Vib. validiert.
 
-Der relevante autonome Kern (ohne Halvings, ohne Sign-OU, ohne Damping) ist (`lpplattr02_ode.py:75-90`):
-
-```python
-def system_of_equations(y, noisy_values, t_current=1, ...):
-    y1, y2, z = y
-    dy1 = y2 - Z_A * y2 * z + Z_MIX * (y1 - y2)
-    dy2 = (noisy_values['alpha'] * y2 * abs(y2)**(noisy_values['M'] - 1)
-           - noisy_values['gamma'] * y1 * abs(y1)**(noisy_values['N'] - 1)
-           + Z_B * y1 * z)
-    if use_damping and DAMPING["enabled"]:
-        ...
-        dy2 += (-2.0 * kappa * y2) - (stiff * y1)
-    dz = -Z_C * z + Z_D * y1 + Z_E * y1 * y2
-    return np.array([dy1, dy2, dz])
-```
-
-In Symbolen mit Parametern aus `lpplattr02_params.py`:
-$$\dot y_1 = y_2 - Z_A\,y_2 z + Z_{\text{MIX}}(y_1-y_2)$$
-$$\dot y_2 = \alpha\, y_2 |y_2|^{M-1} - \gamma\, y_1 |y_1|^{N-1} + Z_B\, y_1 z + (\text{optional Damping-Terme})$$
-$$\dot z = -Z_C\, z + Z_D\, y_1 + Z_E\, y_1 y_2$$
-
-mit $\alpha = -7.4\cdot 10^{-4}$, $\gamma = 0.003$, $M \approx 1.071$, $N=3$, $Z_A=Z_B=8\cdot 10^{-3}$, $Z_C=0.0039$, $Z_D=10^{-6}$, $Z_E=2$, $Z_{\text{MIX}}=2\cdot 10^{-4}$.
-
-### 9.2 Probleme bei direkter Anwendung von SSMtool
-
-#### Problem 1: Nicht-mechanische Struktur
-Das System ist 3D im Phasenraum, NICHT in $(y,\dot y)$-Form mit gerader Dimension. SSMtool erwartet eine `M`/`C`/`K`-Aufspaltung. **Es gibt keine kanonische mechanische Form** für dieses LPPL-System, weil $z$ keine Geschwindigkeit ist, sondern eine separate slow-feedback-Variable.
-- **Konsequenz**: Der User kann SSMtool V1.0 NICHT direkt benutzen, ohne den Code zu modifizieren.
-- **Workaround**: Den V1.0-Eingangscode umgehen und direkt in das Innere von `compute_SSM.m` einsteigen — dort wird intern alles auf First-order $\dot x = Ax + F_{nl}(x)$ transformiert. Aber: Die GUI führt diese Transformation hardcoded über `M, C, K` aus. Eine "mechanische Hülle" $M=I, C=0, K=0$ würde funktionieren, wenn man $y_1 = $ Position, $y_2 = $ Geschwindigkeit interpretiert — aber dann fehlt $z$ als dritte Komponente.
-- **Bessere Option**: Skripte aus `Addendum_Isolas/core/` direkt benutzen (`poly_product_DWR.m`, `poly_power.m`, `man2cor.m`, `genlexd.m`, `nch.m`) — die sind allgemein und nicht an mechanische Struktur gebunden. Der User muss dann den Wrapper-Code analog zu `ex_SP_W0_3_W1_0.m` selbst schreiben, mit `ndof_spv = 3` statt `4`, und die Nichtlinearität als symbolische Polynome aufstellen.
-
-#### Problem 2: Power-Law-Nichtlinearität ist NICHT analytisch (Theorie-Annahme aus CFdlL, kein Code-Check)
-**Wichtig zur Einordnung:** SSMtool prüft Analytizität / Glattheit der Nichtlinearität **nirgends explizit im Code**. Die Pipeline ruft `taylor()` auf den symbolischen Ausdruck (`compute_SSM.m:24-35`) und nimmt damit implizit an, dass die Nichtlinearität eine konvergente Taylor-Reihe um den Fixpunkt hat. Die Forderung nach Analytizität (bzw. ausreichender $C^r$-Glattheit) ist eine **Voraussetzung des Cabré-Fontich-de la Llave-Theorems** für die Existenz und Eindeutigkeit der SSM, nicht etwas, das SSMtool intern checken würde. Wenn die Annahme verletzt ist, läuft SSMtool eventuell trotzdem durch — aber das Ergebnis hat keine theoretische Garantie.
-
-Für das LPPL-System bedeutet das:
-- $|y_1|^{N-1}$ mit $N=3$ ist okay: $y_1\cdot |y_1|^2 = y_1^3$ für reelles $y_1$, also analytisch (sogar polynomiell).
-- $|y_2|^{M-1}$ mit $M = 1.071$: $|y_2|^{0.071}$. Das ist **nicht analytisch** am Ursprung — es ist nicht einmal differenzierbar an $y_2 = 0$. **Theoretische Konsequenz**: das Cabré-Fontich-de la Llave-Theorem ist auf das LPPL-System mit nicht-ganzzahligem $M$ strikt nicht anwendbar; SSMs in Haller'schem Sinne sind formal nicht garantiert. SSMtool selbst wird das nicht melden — es würde versuchen, eine Taylor-Entwicklung durchzuführen, die in dieser Form mathematisch nicht existiert.
-- Selbst wenn man $M=1$ exakt setzt (sodass $y_2|y_2|^0 = y_2$ — das ist linear, kein nichtlinearer Beitrag), hat man immer noch $\gamma y_1^3$ als kubische Nichtlinearität, und das System wird wieder analytisch.
-
-**Konsequenz**: Mit dem aktuellen Power-Law $M=1.071$ ist die SSM-Theorie nach Cabré-Fontich-de la Llave strikt nicht anwendbar. SSMtool würde es trotzdem versuchen, aber das Ergebnis wäre nicht theoretisch fundiert. Der User müsste entweder:
-- $M$ auf eine ganze Zahl runden (wie in Standard-Duffing-/Van-der-Pol-Modellen, z.B. $M=1$ oder $M=3$), oder
-- die Power-Law durch ein **anderes glattes Ersatzmodell** ersetzen, z.B. eine Sigmoid-Approximation $y_2 (\epsilon^2 + y_2^2)^{(M-1)/2}$ mit $\epsilon > 0$, das am Ursprung analytisch ist und für $|y_2| \gg \epsilon$ in das ursprüngliche Power-Law übergeht. Eine direkte Taylor-Entwicklung von $y_2|y_2|^{M-1}$ am Ursprung **gibt es nicht**, weil die Funktion dort nicht differenzierbar ist — eine Regularisierung ist Pflicht.
-
-#### Problem 3: Fixpunkt-Lokalisierung
-Der triviale Fixpunkt $(y_1, y_2, z) = (0,0,0)$ ist ein Fixpunkt:
-- $\dot y_1(0) = 0 - 0 + 0 = 0$ ✓
-- $\dot y_2(0) = 0 - 0 + 0 = 0$ ✓ (weil $y_2 |y_2|^{M-1} \to 0$ für $y_2\to 0$ wenn $M>1$, ja)
-- $\dot z(0) = 0$ ✓
-
-**ABER**: Die Linearisierung am Ursprung fehlt im quadratischen Anteil von $y_2|y_2|^{M-1}$ — die Ableitung dieser Funktion bei $y_2=0$ ist
-$$\frac{d}{dy_2}\bigl(y_2 |y_2|^{M-1}\bigr)\bigg|_{y_2=0} = M\cdot |y_2|^{M-1}\big|_{y_2=0} = \begin{cases}0 & M>1 \\ 1 & M=1 \\ \infty & M<1\end{cases}$$
-Also ist die Ableitung 0 für $M=1.071$ — der Term ist lokal flach. Linearisierung ist trotzdem definiert: nur $\gamma y_1 |y_1|^{N-1} = \gamma y_1^3$ gibt ebenfalls keinen linearen Beitrag (nur kubisch), und der lineare Anteil wird allein von den Z-Termen und dem $y_2$-Term in $\dot y_1$ getragen.
-
-#### Problem 4: Linearisierung am Ursprung (Jacobi $A$)
-Streng linearisiert wäre:
-$$A = \begin{pmatrix} \partial_{y_1}\dot y_1 & \partial_{y_2}\dot y_1 & \partial_z \dot y_1 \\ \partial_{y_1}\dot y_2 & \partial_{y_2}\dot y_2 & \partial_z \dot y_2 \\ \partial_{y_1}\dot z & \partial_{y_2}\dot z & \partial_z \dot z \end{pmatrix}\bigg|_{(0,0,0)} = \begin{pmatrix} Z_{\text{MIX}} & 1 - Z_{\text{MIX}} & 0 \\ 0 & 0 & 0 \\ Z_D & 0 & -Z_C \end{pmatrix}$$
-(weil $|y_2|^{M-1}\big|_0 = 0$ für $M>1$, $|y_1|^{N-1}\big|_0 = 0$ für $N>1$, und $Z_E y_1 y_2$ linearisiert sich zu null am Ursprung).
-
-Mit Werten: $Z_{\text{MIX}} = 2\cdot 10^{-4}$, $Z_C = 0.0039$, $Z_D = 10^{-6}$:
-$$A \approx \begin{pmatrix} 2\cdot 10^{-4} & 0.9998 & 0 \\ 0 & 0 & 0 \\ 10^{-6} & 0 & -0.0039 \end{pmatrix}$$
-
-Die Eigenwerte sind:
-- Charakteristisches Polynom: $\det(A - \lambda I) = 0$.
-- Block-Struktur: zweiter Spalte/Reihe ist null in Zeile 2 — also ist $\lambda = 0$ ein Eigenwert (mit Eigenvektor $(0,1,0)^T$ entlang $y_2$).
-- Die übrigen zwei Eigenwerte aus dem $(y_1, z)$-Block:
-$$A_{2\times 2} = \begin{pmatrix} Z_{\text{MIX}} & 0 \\ Z_D & -Z_C \end{pmatrix}$$
-mit Eigenwerten $\lambda = Z_{\text{MIX}} = 2\cdot 10^{-4}$ und $\lambda = -Z_C = -0.0039$.
-
-**Drei Eigenwerte**: $\lambda_1 = 0$ (entartet), $\lambda_2 = 2\cdot 10^{-4} > 0$ (instabil), $\lambda_3 = -3.9\cdot 10^{-3}$ (stabil).
-
-**Das ist keine asymptotische Stabilität**. Zwei der drei Eigenwerte haben nicht-negativen Realteil. SSMtool würde mit `'Real part for each eigenvalue of Spec(A) must be strictly negative'` abbrechen.
-
-Der **dynamisch interessante** Fall im LPPL-System ist eine Hopf-artige Instabilität des Ursprungs mit $y_1, y_2$ als oszillierende Variablen — d. h. das System hat ein **stable limit cycle** mit nichttrivialer Frequenz, NICHT einen asymptotisch stabilen Ursprung. SSMtool ist für genau diesen Fall **nicht entworfen**.
-
-#### Problem 5: Halvings = Zeit-Abhängigkeit = Autonomie-Bruch
-Der `kappa_and_stiffness`-Term in `lpplattr02_ode.py:32-36` und der Halving-Mechanismus in `get_cycle_number`/`get_mu_t`/`get_sigma_t` (`lpplattr02_ode.py:39-67`) sind explizit zeitabhängig:
-```python
-def kappa_and_stiffness(t_current, M2_val, kappa0, t_min):
-    t = max(float(t_current), float(t_min))
-    kappa     = kappa0 * (M2_val / t)
-    ...
-```
-- Die Damping-Stärke skaliert mit $1/t$ — das ist ein klassischer non-autonomer LPPL-Term.
-- Halvings ändern $\mu$ und $\sigma$ in Stufen — das ist ein PWM-artiges, zeitabhängiges Forcing.
-- Die Sign-OU-Komponente (`sign_step_substeps`) ist sogar stochastisch.
-
-**Konsequenz**: SSMtool V1.0 ist autonom-only. Selbst das Addendum_Isolas behandelt nur **periodisches** Forcing (nicht $1/t$, nicht stufenweise PWM). Das LPPL-System verletzt die Autonomie-Voraussetzung in fundamentaler Weise.
-
-### 9.3 Welche SSM-Dimension wäre theoretisch sinnvoll?
-Wenn man die Power-Law-Nichtlinearitäten durch Polynom-Approximationen ersetzt, das System um einen wirklich stabilen Fixpunkt linearisiert (z. B. nach Modifikation der Z-Parameter, sodass alle Eigenwerte negativen Realteil haben), und die Zeit-Abhängigkeiten ignoriert, dann wäre eine **2D-SSM** über dem $(y_1, y_2)$-Oszillations-Modus die natürliche Wahl: $z$ ist die slow-feedback-Variable und sollte nicht im Master-Subraum sein. Das passt zur SSMtool-V1.0-Beschränkung auf 2D-SSMs.
-
-### 9.4 Bewertung
-| Kriterium | Status | Schweregrad |
-|---|---|---|
-| Mechanische $M, C, K$-Form | Nicht vorhanden | Hard-Block für GUI-Pfad; lösbar via Eigenbau-Skripte aus `Addendum_Isolas/core/` |
-| Analytizität von $f$ | Verletzt durch $|y_2|^{M-1}$ mit $M$ nicht-ganzzahlig | Hard-Block; nur lösbar durch Approximation |
-| Asymptotische Stabilität am Ursprung | NICHT erfüllt mit aktuellen Parametern (zwei Eigenwerte $\ge 0$) | Hard-Block; eventuell durch Parameter-Verschiebung lösbar, aber dann ist es ein anderes System |
-| Autonomie | Verletzt durch Halvings, Damping $\propto 1/t$, Sign-OU | Hard-Block für V1.0; teilweise lösbar mit Addendum_Isolas, aber nur für **periodisches** Forcing |
-| 2D-SSM-Geometrie | Sinnvoll wenn $(y_1,y_2)$ als Master und $z$ als slow-feedback | Konzeptionell OK |
-| 3D-Phasenraum | Akzeptabel wenn man `ndof_spv = 3` nimmt und Eigenbau-Skripte schreibt | Lösbar mit manueller Arbeit |
-| Power-Laws $M$, $N$ ganzzahlig? | $N=3$ ist OK, $M=1.071$ nicht | Hard-Block oder Approximation |
-
-**Gesamturteil**: Das LPPL-System verletzt **mehrere unabhängige** Voraussetzungen von SSMtool. Eine direkte Anwendung ist NICHT möglich. Teilweise Anwendbarkeit setzt voraus, dass der User ein vereinfachtes, autonomes Modell mit ganzzahligen Power-Laws und einem stabilen Fixpunkt formuliert. Selbst dann ist nicht klar, ob das vereinfachte Modell die für den User interessante Dynamik (die LPPL-Power-Law-Singularität, das slow drift in $z$, die halvings) noch widerspiegelt.
-
----
-
-## 10. Konkrete Checkliste: Was der User MATLAB-seitig tun müsste
-
-Falls der User SSMtool dennoch ausprobieren will (z. B. auf einem stark vereinfachten Modell):
-
-### 10.1 Vorbereitung
-1. MATLAB R2016b oder neuer installieren (Manual S. 5).
-2. **Symbolic Math Toolbox** installieren (zwingend für `taylor`, `sym`, `eig` symbolisch).
-3. **Parallel Computing Toolbox** installieren (zwingend, weil `compute_SSM.m:160-163` `spmd` benutzt).
-4. SSMtool aus `/home/hz/Data/Attractor/SSMtool/SSMtool/` ins MATLAB-Working-Directory laden.
-
-### 10.2 System aufbereiten
-5. Power-Law-Nichtlinearitäten ersetzen:
-   - $y_2 |y_2|^{M-1}$ mit $M=1.071$: ersetzen durch $y_2$ (linear) oder durch $y_2^3$ (kubisch, aber falsche Skalierung) oder durch eine Polynom-Approximation um den Arbeitspunkt. **Genaue Wahl muss der User physikalisch motivieren.**
-   - $\gamma y_1 |y_1|^{N-1}$ mit $N=3$: das ist $\gamma y_1^3$, OK als Polynom.
-6. Zeit-Abhängigkeiten entfernen:
-   - Halvings ausschalten (`HALVING_ENABLED=[False]*10` oder explizit ignorieren).
-   - Damping ausschalten oder konstant halten (statt $\propto 1/t$).
-   - Sign-OU ignorieren (deterministische Approximation).
-7. Fixpunkt explizit lokalisieren: $(0,0,0)$ ist trivial, aber prüfen, ob er für die gewählten Parameter wirklich asymptotisch stabil ist (Eigenwerte $A$ alle mit negativem Realteil).
-8. Falls **nicht** stabil: Parameter so verschieben, dass alle drei Eigenwerte negativen Realteil haben — z. B. $Z_{\text{MIX}}$ negativ machen, eine echte Damping-Konstante hinzufügen.
-
-### 10.3 SSMtool-Pfad: NICHT der GUI-Pfad
-Weil das LPPL-System keine kanonische $M\ddot y + C\dot y + Ky$-Struktur hat, ist der GUI-Pfad NICHT brauchbar. Stattdessen:
-
-#### Option A: Eigenbau via `Addendum_Isolas/core/`
-9. Schreibe ein eigenes Top-Level-Skript analog zu `ex_SP_W0_3_W1_0.m` mit `ndof_spv = 3` (statt 4) und `nvar = 2` (Master-Subraum-Dimension).
-10. Setze die symbolische Nichtlinearität direkt:
-```matlab
-syms y1 y2 z real
-f = [-Z_A*y2*z; Z_B*y1*z + Z_E*y1*y2 - gamma*y1^3; Z_E*y1*y2];
-```
-(nach Vereinfachungen aus Schritt 5).
-11. Bilde $A$ analytisch durch Linearisierung: `A = double(jacobian(f + [y2; 0; 0], [y1;y2;z]))` an $(0,0,0)$.
-12. Eigendekomposition: `[X,D] = eig(A); lambda = diag(D);`
-13. Wähle 2 Eigenwerte für den Master (idealerweise das komplex-konjugierte Paar mit kleinstem $|\mathrm{Re}\lambda|$).
-14. Iteriere mit den Polynom-Helfern (`poly_product_DWR`, `poly_power`, `man2cor`, `nch`, `genlexd`) ordnungsweise wie in `ex_SP_W0_3_W1_0.m:131-269`.
-15. Cohomologische Gleichung manuell aufstellen: pro Mode $j$ und Polynomindex $(m_1,m_2)$:
-$$W_j(m) = \frac{\mathrm{RHS}_j(m) - \mathrm{Resonanz}}{\lambda_j - m_1\lambda_1 - m_2\lambda_2}$$
-
-#### Option B: GUI-Pfad mit künstlichem mechanischem Wrapper (NICHT empfohlen)
-16. Definiere eine künstliche $M, C, K, f$-Struktur mit $n=2$ DOF, sodass die ersten beiden Variablen $(y_1, y_2)$ die Master-Mode bilden. $z$ wird dann zur "Geschwindigkeit" der zweiten DOF gemacht — ABER das verletzt die Bedeutung von $z$ als slow-feedback. Man verliert die Interpretation, und die Eigenwerte des resultierenden $A$ entsprechen nicht den tatsächlichen Eigenwerten des LPPL-Systems.
-17. **Fazit zu Option B**: Funktioniert nur mit massivem Verlust an Bedeutung. Nicht empfohlen.
-
-### 10.4 Was der User NICHT erreichen wird
-- Eine SSM-Beschreibung des **echten** LPPL-Systems mit allen Halvings, allen Power-Laws, allem Sign-OU. Das übersteigt die theoretischen Voraussetzungen von SSMtool und CFdlL fundamental.
-- Aussagen zu globalen Strukturen wie Heteroklinen-Verbindungen, Limit-Cycles abseits des Ursprungs, oder dem Übergangsverhalten zwischen Halvings.
-
-### 10.5 Was der User stattdessen evaluieren sollte
-- **SSMLearn** (data-driven): nimmt Trajektorien aus dem LPPL-Simulator und versucht, eine SSM aus den Daten zu lernen. Verlangt nicht die theoretischen Voraussetzungen von SSMtool, dafür aber genügend gute Daten.
-- **Center-Manifold-Berechnung** für das slow-fast-System mit $z$ als slow-Variable — das ist konzeptionell näher an der LPPL-Struktur als SSM.
-- **Averaging / Slow-Manifold-Theory** für den $\dot z = -Z_C z + \ldots$-Anteil mit $1/Z_C \approx 256$ als langsamer Zeitskala, gegenüber der schnellen $(y_1,y_2)$-Oszillation.
-
----
-
-## 11. Zusammenfassung der wichtigsten Code-Pfade (Cheat-Sheet für Codex)
+## 23. Code-Pfad-Cheat-Sheet (V1.0)
 
 | Schritt | Datei | Funktion | Zeilen |
 |---|---|---|---|
@@ -1042,13 +1419,197 @@ $$W_j(m) = \frac{\mathrm{RHS}_j(m) - \mathrm{Resonanz}}{\lambda_j - m_1\lambda_1
 
 ---
 
-## 12. Wörtliche Schlüssel-Zitate aus dem Manual (für Quellen-Validierung)
+# Teil IV — Anwendbarkeit auf lokale Arbeit
 
-> "$\dot{z} = R(z)$"
-> — `SSMtool_manual.pdf:4` (Gleichung 1.2)
+## 24. LPPL-System (`lpplattr02_ode.py`) gegen die V1.0-Voraussetzungen
 
-> "$\dot{\rho} = a(\rho), \quad \Omega = \dot{\theta} = b(\rho)$"
-> — `SSMtool_manual.pdf:4` (Gleichung 1.3)
+### 24.1 Das System (`/home/hz/Data/LPPL-forced/LPPL-attractor/lpplattr02_ode.py`)
+
+Der relevante autonome Kern (ohne Halvings, ohne Sign-OU, ohne Damping) ist (`lpplattr02_ode.py:75-90`):
+
+```python
+def system_of_equations(y, noisy_values, t_current=1, ...):
+    y1, y2, z = y
+    dy1 = y2 - Z_A * y2 * z + Z_MIX * (y1 - y2)
+    dy2 = (noisy_values['alpha'] * y2 * abs(y2)**(noisy_values['M'] - 1)
+           - noisy_values['gamma'] * y1 * abs(y1)**(noisy_values['N'] - 1)
+           + Z_B * y1 * z)
+    if use_damping and DAMPING["enabled"]:
+        ...
+        dy2 += (-2.0 * kappa * y2) - (stiff * y1)
+    dz = -Z_C * z + Z_D * y1 + Z_E * y1 * y2
+    return np.array([dy1, dy2, dz])
+```
+
+In Symbolen mit Parametern aus `lpplattr02_params.py`:
+$$\dot y_1 = y_2 - Z_A\,y_2 z + Z_{\text{MIX}}(y_1-y_2)$$
+$$\dot y_2 = \alpha\, y_2 |y_2|^{M-1} - \gamma\, y_1 |y_1|^{N-1} + Z_B\, y_1 z + (\text{optional Damping-Terme})$$
+$$\dot z = -Z_C\, z + Z_D\, y_1 + Z_E\, y_1 y_2$$
+
+mit $\alpha = -7.4\cdot 10^{-4}$, $\gamma = 0.003$, $M \approx 1.071$, $N=3$, $Z_A=Z_B=8\cdot 10^{-3}$, $Z_C=0.0039$, $Z_D=10^{-6}$, $Z_E=2$, $Z_{\text{MIX}}=2\cdot 10^{-4}$.
+
+### 24.2 Probleme bei direkter Anwendung von SSMtool V1.0
+
+#### Problem 1: Nicht-mechanische Struktur
+Das System ist 3D im Phasenraum, NICHT in $(y,\dot y)$-Form mit gerader Dimension. SSMtool erwartet eine `M`/`C`/`K`-Aufspaltung. **Es gibt keine kanonische mechanische Form** für dieses LPPL-System, weil $z$ keine Geschwindigkeit ist, sondern eine separate slow-feedback-Variable.
+- **Konsequenz**: SSMtool V1.0 ist NICHT direkt benutzbar, ohne den Code zu modifizieren.
+- **Workaround**: Den V1.0-Eingangscode umgehen und direkt in das Innere von `compute_SSM.m` einsteigen — dort wird intern alles auf First-order $\dot x = Ax + F_{nl}(x)$ transformiert. Aber: Die GUI führt diese Transformation hardcoded über `M, C, K` aus. Eine "mechanische Hülle" $M=I, C=0, K=0$ würde funktionieren, wenn man $y_1 = $ Position, $y_2 = $ Geschwindigkeit interpretiert — aber dann fehlt $z$ als dritte Komponente.
+- **Bessere Option**: Skripte aus `Addendum_Isolas/core/` direkt benutzen (`poly_product_DWR.m`, `poly_power.m`, `man2cor.m`, `genlexd.m`, `nch.m`) — die sind allgemein und nicht an mechanische Struktur gebunden. Der Wrapper-Code muss dann analog zu `ex_SP_W0_3_W1_0.m` selbst geschrieben werden, mit `ndof_spv = 3` statt `4`, und die Nichtlinearität als symbolische Polynome aufgestellt werden.
+- **Hinweis 2.6**: `SSMTool_jain` akzeptiert first-order Systeme `B zdot = F(z) + Fext(t)` direkt (siehe Abschnitt 5.1) — das Struktur-Problem entfällt dort, die übrigen Probleme (Analytizität, Stabilität, Autonomie) bleiben.
+
+#### Problem 2: Power-Law-Nichtlinearität ist NICHT analytisch (Theorie-Annahme aus CFdlL, kein Code-Check)
+**Wichtig zur Einordnung:** SSMtool prüft Analytizität / Glattheit der Nichtlinearität **nirgends explizit im Code**. Die Pipeline ruft `taylor()` auf den symbolischen Ausdruck (`compute_SSM.m:24-35`) und nimmt damit implizit an, dass die Nichtlinearität eine konvergente Taylor-Reihe um den Fixpunkt hat. Die Forderung nach Analytizität (bzw. ausreichender $C^r$-Glattheit) ist eine **Voraussetzung des Cabré-Fontich-de la Llave-Theorems** für die Existenz und Eindeutigkeit der SSM, nicht etwas, das SSMtool intern checken würde. Wenn die Annahme verletzt ist, läuft SSMtool eventuell trotzdem durch — aber das Ergebnis hat keine theoretische Garantie.
+
+Für das LPPL-System bedeutet das:
+- $|y_1|^{N-1}$ mit $N=3$ ist okay: $y_1\cdot |y_1|^2 = y_1^3$ für reelles $y_1$, also analytisch (sogar polynomiell).
+- $|y_2|^{M-1}$ mit $M = 1.071$: $|y_2|^{0.071}$. Das ist **nicht analytisch** am Ursprung — es ist nicht einmal differenzierbar an $y_2 = 0$. **Theoretische Konsequenz**: das Cabré-Fontich-de la Llave-Theorem ist auf das LPPL-System mit nicht-ganzzahligem $M$ strikt nicht anwendbar; SSMs in Haller'schem Sinne sind formal nicht garantiert. SSMtool selbst wird das nicht melden — es würde versuchen, eine Taylor-Entwicklung durchzuführen, die in dieser Form mathematisch nicht existiert.
+- Selbst wenn man $M=1$ exakt setzt (sodass $y_2|y_2|^0 = y_2$ — das ist linear, kein nichtlinearer Beitrag), hat man immer noch $\gamma y_1^3$ als kubische Nichtlinearität, und das System wird wieder analytisch.
+
+**Konsequenz**: Mit dem aktuellen Power-Law $M=1.071$ ist die SSM-Theorie nach Cabré-Fontich-de la Llave strikt nicht anwendbar. SSMtool würde es trotzdem versuchen, aber das Ergebnis wäre nicht theoretisch fundiert. Optionen:
+- $M$ auf eine ganze Zahl runden (wie in Standard-Duffing-/Van-der-Pol-Modellen, z.B. $M=1$ oder $M=3$), oder
+- die Power-Law durch ein **anderes glattes Ersatzmodell** ersetzen, z.B. eine Sigmoid-Approximation $y_2 (\epsilon^2 + y_2^2)^{(M-1)/2}$ mit $\epsilon > 0$, das am Ursprung analytisch ist und für $|y_2| \gg \epsilon$ in das ursprüngliche Power-Law übergeht. Eine direkte Taylor-Entwicklung von $y_2|y_2|^{M-1}$ am Ursprung **gibt es nicht**, weil die Funktion dort nicht differenzierbar ist — eine Regularisierung ist Pflicht.
+
+#### Problem 3: Fixpunkt-Lokalisierung
+Der triviale Fixpunkt $(y_1, y_2, z) = (0,0,0)$ ist ein Fixpunkt:
+- $\dot y_1(0) = 0 - 0 + 0 = 0$ ✓
+- $\dot y_2(0) = 0 - 0 + 0 = 0$ ✓ (weil $y_2 |y_2|^{M-1} \to 0$ für $y_2\to 0$ wenn $M>1$, ja)
+- $\dot z(0) = 0$ ✓
+
+**ABER**: Die Linearisierung am Ursprung fehlt im quadratischen Anteil von $y_2|y_2|^{M-1}$ — die Ableitung dieser Funktion bei $y_2=0$ ist
+$$\frac{d}{dy_2}\bigl(y_2 |y_2|^{M-1}\bigr)\bigg|_{y_2=0} = M\cdot |y_2|^{M-1}\big|_{y_2=0} = \begin{cases}0 & M>1 \\ 1 & M=1 \\ \infty & M<1\end{cases}$$
+Also ist die Ableitung 0 für $M=1.071$ — der Term ist lokal flach. Linearisierung ist trotzdem definiert: nur $\gamma y_1 |y_1|^{N-1} = \gamma y_1^3$ gibt ebenfalls keinen linearen Beitrag (nur kubisch), und der lineare Anteil wird allein von den Z-Termen und dem $y_2$-Term in $\dot y_1$ getragen.
+
+#### Problem 4: Linearisierung am Ursprung (Jacobi $A$)
+Streng linearisiert wäre:
+$$A = \begin{pmatrix} \partial_{y_1}\dot y_1 & \partial_{y_2}\dot y_1 & \partial_z \dot y_1 \\ \partial_{y_1}\dot y_2 & \partial_{y_2}\dot y_2 & \partial_z \dot y_2 \\ \partial_{y_1}\dot z & \partial_{y_2}\dot z & \partial_z \dot z \end{pmatrix}\bigg|_{(0,0,0)} = \begin{pmatrix} Z_{\text{MIX}} & 1 - Z_{\text{MIX}} & 0 \\ 0 & 0 & 0 \\ Z_D & 0 & -Z_C \end{pmatrix}$$
+(weil $|y_2|^{M-1}\big|_0 = 0$ für $M>1$, $|y_1|^{N-1}\big|_0 = 0$ für $N>1$, und $Z_E y_1 y_2$ linearisiert sich zu null am Ursprung).
+
+Mit Werten: $Z_{\text{MIX}} = 2\cdot 10^{-4}$, $Z_C = 0.0039$, $Z_D = 10^{-6}$:
+$$A \approx \begin{pmatrix} 2\cdot 10^{-4} & 0.9998 & 0 \\ 0 & 0 & 0 \\ 10^{-6} & 0 & -0.0039 \end{pmatrix}$$
+
+Die Eigenwerte sind:
+- Charakteristisches Polynom: $\det(A - \lambda I) = 0$.
+- Block-Struktur: zweite Spalte/Reihe ist null in Zeile 2 — also ist $\lambda = 0$ ein Eigenwert (mit Eigenvektor $(0,1,0)^T$ entlang $y_2$).
+- Die übrigen zwei Eigenwerte aus dem $(y_1, z)$-Block:
+$$A_{2\times 2} = \begin{pmatrix} Z_{\text{MIX}} & 0 \\ Z_D & -Z_C \end{pmatrix}$$
+mit Eigenwerten $\lambda = Z_{\text{MIX}} = 2\cdot 10^{-4}$ und $\lambda = -Z_C = -0.0039$.
+
+**Drei Eigenwerte**: $\lambda_1 = 0$ (entartet), $\lambda_2 = 2\cdot 10^{-4} > 0$ (instabil), $\lambda_3 = -3.9\cdot 10^{-3}$ (stabil).
+
+**Das ist keine asymptotische Stabilität**. Zwei der drei Eigenwerte haben nicht-negativen Realteil. SSMtool würde mit `'Real part for each eigenvalue of Spec(A) must be strictly negative'` abbrechen.
+
+Der **dynamisch interessante** Fall im LPPL-System ist eine Hopf-artige Instabilität des Ursprungs mit $y_1, y_2$ als oszillierende Variablen — d. h. das System hat ein **stable limit cycle** mit nichttrivialer Frequenz, NICHT einen asymptotisch stabilen Ursprung. SSMtool ist für genau diesen Fall **nicht entworfen**.
+
+#### Problem 5: Halvings = Zeit-Abhängigkeit = Autonomie-Bruch
+Der `kappa_and_stiffness`-Term in `lpplattr02_ode.py:32-36` und der Halving-Mechanismus in `get_cycle_number`/`get_mu_t`/`get_sigma_t` (`lpplattr02_ode.py:39-67`) sind explizit zeitabhängig:
+```python
+def kappa_and_stiffness(t_current, M2_val, kappa0, t_min):
+    t = max(float(t_current), float(t_min))
+    kappa     = kappa0 * (M2_val / t)
+    ...
+```
+- Die Damping-Stärke skaliert mit $1/t$ — das ist ein klassischer non-autonomer LPPL-Term.
+- Halvings ändern $\mu$ und $\sigma$ in Stufen — das ist ein PWM-artiges, zeitabhängiges Forcing.
+- Die Sign-OU-Komponente (`sign_step_substeps`) ist sogar stochastisch.
+
+**Konsequenz**: SSMtool V1.0 ist autonom-only. Selbst das Addendum_Isolas behandelt nur **periodisches** Forcing (nicht $1/t$, nicht stufenweise PWM). Auch die nichtautonomen 2.6-Workflows (`compute_perturbed_whisker`) setzen periodische/quasi-periodische Forcierung mit Fourier-Indizes `kappa` voraus. Das LPPL-System verletzt die Autonomie-Voraussetzung in fundamentaler Weise.
+
+### 24.3 Welche SSM-Dimension wäre theoretisch sinnvoll?
+Wenn man die Power-Law-Nichtlinearitäten durch Polynom-Approximationen ersetzt, das System um einen wirklich stabilen Fixpunkt linearisiert (z. B. nach Modifikation der Z-Parameter, sodass alle Eigenwerte negativen Realteil haben), und die Zeit-Abhängigkeiten ignoriert, dann wäre eine **2D-SSM** über dem $(y_1, y_2)$-Oszillations-Modus die natürliche Wahl: $z$ ist die slow-feedback-Variable und sollte nicht im Master-Subraum sein. Das passt zur SSMtool-V1.0-Beschränkung auf 2D-SSMs.
+
+### 24.4 Bewertung
+
+| Kriterium | Status | Schweregrad |
+|---|---|---|
+| Mechanische $M, C, K$-Form | Nicht vorhanden | Hard-Block für GUI-Pfad; lösbar via Eigenbau-Skripte aus `Addendum_Isolas/core/` (oder first-order-Pfad in 2.6) |
+| Analytizität von $f$ | Verletzt durch $|y_2|^{M-1}$ mit $M$ nicht-ganzzahlig | Hard-Block; nur lösbar durch Approximation |
+| Asymptotische Stabilität am Ursprung | NICHT erfüllt mit aktuellen Parametern (zwei Eigenwerte $\ge 0$) | Hard-Block; eventuell durch Parameter-Verschiebung lösbar, aber dann ist es ein anderes System |
+| Autonomie | Verletzt durch Halvings, Damping $\propto 1/t$, Sign-OU | Hard-Block für V1.0; teilweise lösbar mit Addendum_Isolas bzw. 2.6, aber nur für **periodisches** Forcing |
+| 2D-SSM-Geometrie | Sinnvoll wenn $(y_1,y_2)$ als Master und $z$ als slow-feedback | Konzeptionell OK |
+| 3D-Phasenraum | Akzeptabel wenn man `ndof_spv = 3` nimmt und Eigenbau-Skripte schreibt | Lösbar mit manueller Arbeit |
+| Power-Laws $M$, $N$ ganzzahlig? | $N=3$ ist OK, $M=1.071$ nicht | Hard-Block oder Approximation |
+
+**Gesamturteil**: Das LPPL-System verletzt **mehrere unabhängige** Voraussetzungen von SSMtool. Eine direkte Anwendung ist NICHT möglich. Teilweise Anwendbarkeit setzt voraus, dass ein vereinfachtes, autonomes Modell mit ganzzahligen Power-Laws und einem stabilen Fixpunkt formuliert wird. Selbst dann ist nicht klar, ob das vereinfachte Modell die interessante Dynamik (die LPPL-Power-Law-Singularität, das slow drift in $z$, die Halvings) noch widerspiegelt.
+
+## 25. MATLAB-Checkliste für ein vereinfachtes LPPL-Modell
+
+Falls SSMtool dennoch ausprobiert werden soll (z. B. auf einem stark vereinfachten Modell):
+
+### 25.1 Vorbereitung
+1. MATLAB R2016b oder neuer installieren (Manual S. 5).
+2. **Symbolic Math Toolbox** installieren (zwingend für `taylor`, `sym`, `eig` symbolisch).
+3. **Parallel Computing Toolbox** installieren (zwingend, weil `compute_SSM.m:160-163` `spmd` benutzt).
+4. SSMtool aus `/home/hz/Data/Attractor/SSMtool/SSMtool/` ins MATLAB-Working-Directory laden.
+
+### 25.2 System aufbereiten
+5. Power-Law-Nichtlinearitäten ersetzen:
+   - $y_2 |y_2|^{M-1}$ mit $M=1.071$: ersetzen durch $y_2$ (linear) oder durch $y_2^3$ (kubisch, aber falsche Skalierung) oder durch eine Polynom-Approximation um den Arbeitspunkt. **Genaue Wahl muss physikalisch motiviert werden.**
+   - $\gamma y_1 |y_1|^{N-1}$ mit $N=3$: das ist $\gamma y_1^3$, OK als Polynom.
+6. Zeit-Abhängigkeiten entfernen:
+   - Halvings ausschalten (`HALVING_ENABLED=[False]*10` oder explizit ignorieren).
+   - Damping ausschalten oder konstant halten (statt $\propto 1/t$).
+   - Sign-OU ignorieren (deterministische Approximation).
+7. Fixpunkt explizit lokalisieren: $(0,0,0)$ ist trivial, aber prüfen, ob er für die gewählten Parameter wirklich asymptotisch stabil ist (Eigenwerte $A$ alle mit negativem Realteil).
+8. Falls **nicht** stabil: Parameter so verschieben, dass alle drei Eigenwerte negativen Realteil haben — z. B. $Z_{\text{MIX}}$ negativ machen, eine echte Damping-Konstante hinzufügen.
+
+### 25.3 SSMtool-Pfad: NICHT der GUI-Pfad
+Weil das LPPL-System keine kanonische $M\ddot y + C\dot y + Ky$-Struktur hat, ist der GUI-Pfad NICHT brauchbar. Stattdessen:
+
+#### Option A: Eigenbau via `Addendum_Isolas/core/`
+9. Schreibe ein eigenes Top-Level-Skript analog zu `ex_SP_W0_3_W1_0.m` mit `ndof_spv = 3` (statt 4) und `nvar = 2` (Master-Subraum-Dimension).
+10. Setze die symbolische Nichtlinearität direkt:
+```matlab
+syms y1 y2 z real
+f = [-Z_A*y2*z; Z_B*y1*z + Z_E*y1*y2 - gamma*y1^3; Z_E*y1*y2];
+```
+(nach Vereinfachungen aus Schritt 5).
+11. Bilde $A$ analytisch durch Linearisierung: `A = double(jacobian(f + [y2; 0; 0], [y1;y2;z]))` an $(0,0,0)$.
+12. Eigendekomposition: `[X,D] = eig(A); lambda = diag(D);`
+13. Wähle 2 Eigenwerte für den Master (idealerweise das komplex-konjugierte Paar mit kleinstem $|\mathrm{Re}\lambda|$).
+14. Iteriere mit den Polynom-Helfern (`poly_product_DWR`, `poly_power`, `man2cor`, `nch`, `genlexd`) ordnungsweise wie in `ex_SP_W0_3_W1_0.m:131-269`.
+15. Cohomologische Gleichung manuell aufstellen: pro Mode $j$ und Polynomindex $(m_1,m_2)$:
+$$W_j(m) = \frac{\mathrm{RHS}_j(m) - \mathrm{Resonanz}}{\lambda_j - m_1\lambda_1 - m_2\lambda_2}$$
+
+#### Option B: GUI-Pfad mit künstlichem mechanischem Wrapper (NICHT empfohlen)
+16. Definiere eine künstliche $M, C, K, f$-Struktur mit $n=2$ DOF, sodass die ersten beiden Variablen $(y_1, y_2)$ die Master-Mode bilden. $z$ wird dann zur "Geschwindigkeit" der zweiten DOF gemacht — ABER das verletzt die Bedeutung von $z$ als slow-feedback. Man verliert die Interpretation, und die Eigenwerte des resultierenden $A$ entsprechen nicht den tatsächlichen Eigenwerten des LPPL-Systems.
+17. **Fazit zu Option B**: Funktioniert nur mit massivem Verlust an Bedeutung. Nicht empfohlen.
+
+### 25.4 Was damit NICHT erreichbar ist
+- Eine SSM-Beschreibung des **echten** LPPL-Systems mit allen Halvings, allen Power-Laws, allem Sign-OU. Das übersteigt die theoretischen Voraussetzungen von SSMtool und CFdlL fundamental.
+- Aussagen zu globalen Strukturen wie Heteroklinen-Verbindungen, Limit-Cycles abseits des Ursprungs, oder dem Übergangsverhalten zwischen Halvings.
+
+## 26. Transfergrenzen für BTC/Residuen und Empfehlung
+
+Für BTC / Residuen / Ensemble-`n` ist `SSMTool_jain` nicht direkt ein Ersatz.
+
+Direkt übertragbar sind vor allem:
+- saubere Vorprüfungen
+- Resonanzlogik
+- explizite Trennung autonom / nichtautonom
+- Qualitätsdiagnostik (Invarianzfehler, Analytizitätsbereich)
+- klarerer Workflow zwischen Mannigfaltigkeit und reduzierter Dynamik
+
+Nicht direkt übertragbar:
+- mechanischer Inputstil
+- FE-/COMSOL-Wrapper
+- COCO-basierte FRS-/Torus-Workflows
+
+Alternativen zum modellbasierten Pfad:
+- **SSMLearn / SSMLearnPy** (data-driven): nimmt Trajektorien aus dem LPPL-Simulator und versucht, eine SSM aus den Daten zu lernen. Verlangt nicht die theoretischen Voraussetzungen von SSMtool, dafür aber genügend gute Daten.
+- **Center-Manifold-Berechnung** für das slow-fast-System mit $z$ als slow-Variable — das ist konzeptionell näher an der LPPL-Struktur als SSM.
+- **Averaging / Slow-Manifold-Theory** für den $\dot z = -Z_C z + \ldots$-Anteil mit $1/Z_C \approx 256$ als langsamer Zeitskala, gegenüber der schnellen $(y_1,y_2)$-Oszillation.
+
+Fazit:
+- `SSMTool_jain` ist methodische Referenz,
+- `SSMLearnPy` bleibt für datengetriebene BTC-Analysen die richtige Familie.
+
+---
+
+# Anhänge
+
+## Anhang A: Manual-Schlüsselzitate (V1.0)
+
+(Zitate, die nicht bereits inline in den Abschnitten 15 und 17 stehen.)
 
 (abridged, Auslassungen explizit markiert)
 > "After specifying an autonomous mechanical system, press `Analyze` to extract the eigenvalues of the system […Zwischensätze ausgelassen…] Select a two-dimensional spectral subspace $\mathcal{E}$, by selecting a pair of complex conjugate eigenvalues and pressing the `Select` button […Zwischensätze ausgelassen…] SSMtool will calculate the spectral quotient $\sigma(\mathcal{E})$, which indicates the minimum order of the Taylor expansion needed to be able to the capture the unique SSM. Additionally, SSMtool will check if the outer non-resonance conditions […genaue Bedingungs-Formel ausgelassen…] are satisfied in order to guarantee that the SSM of interest exists […Zwischensätze ausgelassen…] In case of a lightly damped spectral subspace $\mathcal{E}$, SSMtool will check for near inner-resonances […Detailtext ausgelassen…] up to the order dictated by the spectral quotient."
@@ -1057,15 +1618,12 @@ $$W_j(m) = \frac{\mathrm{RHS}_j(m) - \mathrm{Resonanz}}{\lambda_j - m_1\lambda_1
 > "You are now required to specify the order of the Taylor expansion and select if the output coordinates of the SSM should be in modal, physical or complex coordinates. The 'Check for higher-order internal resonances' checkbox is there to specify if SSMtool should check for near internal-resonances up to the order of expansion instead of the order dictated by the spectral quotient"
 > — `SSMtool_manual.pdf:9`
 
-> "$\delta_{\text{inv}} = \frac{1}{N}\sum_{i=1}^N \frac{\mathrm{dist}(i)}{\max_{\theta\in S^1}\|\tilde{\mathbf{x}}(\rho_0,\theta)\|_2}, \quad \mathrm{dist}(i) = \max\left\|\mathbf{x}_i\big|^{\rho_\epsilon}_{\rho_0} - \tilde{\mathbf{x}}_i\big|^{\rho_\epsilon}_{\rho_0}\right\|_2$"
-> — `SSMtool_manual.pdf:14` (Gleichung 2.1)
-
 > "We have improved the core of SSMtool to handle systems with time-periodic forcing. We have used the exact reduced dynamics on two-dimensional time-periodic spectral submanifolds (SSMs) to extract forced-response curves (FRCs) and predict isolas in arbitrary multi-degree-of-freedom mechanical systems without performing costly numerical simulations [3]."
 > — `README.md:20-22`
 
----
+## Anhang B: Referenzen
 
-## 13. Referenzen (aus Manual, S. 15)
+Aus Manual S. 15:
 
 1. G. Haller and S. Ponsioen. *Nonlinear normal modes and spectral submanifolds: existence, uniqueness and use in model reduction*. Nonlinear Dyn., 86(3):1493–1534, 2016.
 2. S. Ponsioen, T. Pedergnana, and G. Haller. *Automated computation of autonomous spectral submanifolds for nonlinear modal analysis*. Journal of Sound and Vibration, 420:269–295, 2018.
@@ -1076,23 +1634,7 @@ $$W_j(m) = \frac{\mathrm{RHS}_j(m) - \mathrm{Resonanz}}{\lambda_j - m_1\lambda_1
 Theoretischer Hintergrund (CFdlL):
 - X. Cabré, E. Fontich, R. de la Llave. *The parameterization method for invariant manifolds*. Indiana Univ. Math. J. 52 (2003).
 
----
-
-## 14. Was an SSMtool ungewöhnlich oder unterspezifiziert ist
-
-1. **Hardcoded 2D-Master-Dimension**: Die Variable `nvar = 2` ist überall im Code fest verankert. Eine Verallgemeinerung auf 4D, 6D etc. erfordert nicht-triviale Code-Änderungen in `compute_SSM.m`, `kronKR.m`, `kronGK.m`.
-2. **Redundante $2^k$-Polynombasis** statt $\binom{k+1}{1}$ — verschwendet Speicher, aber vereinfacht die Kronecker-Produkt-Algebra.
-3. **`spmd`-Pflicht**: SSMtool versucht implizit, einen Parallel-Pool zu starten. Wenn das fehlschlägt (z. B. ohne Parallel Toolbox), bricht der Lauf bei `cluster = load('cluster_info.mat')` ab, weil die Datei noch nicht existiert.
-4. **Side-effects ins Working-Directory**: SSMtool legt mehrere Dateien im aktuellen MATLAB-Pfad ab (`cs.mat`, `cluster_info.mat`, auto-generierte `.m`-Files). Mehrere parallele SSMtool-Instanzen würden sich gegenseitig überschreiben.
-5. **`SSM.m` mischt GUI-Code (GUIDE-generiert) mit Numerik-Aufrufen** — unsauber, aber lauffähig.
-6. **Manual ist sehr knapp** (15 Seiten) und bezieht sich für die Mathematik fast vollständig auf das JSV-2018-Paper [2]. Dieses Paper ist die eigentliche Referenz für alle Formeln; das Manual ist nur ein Bedienungs-Tutorial.
-7. **Die "complex coordinates"-Option** in `SSM.m:594-597` ist nur teilweise dokumentiert — sie liefert die SSM in den komplexen Master-Koordinaten ohne Rück-Transformation.
-8. **Numerische Stabilität** bei Ordnung > 10 ist nicht garantiert; das `round(...,17)` in `compute_SSM.m:177-178` ist ein primitiver Filter.
-9. **Keine Unit-Tests, keine Validierungs-Suite** im Repo. Die Korrektheit wird allein durch die Predefined-Examples und die Veröffentlichung in J. Sound Vib. validiert.
-
----
-
-## Anhang A: Funktions-Index (im Workflow-Text erwähnte `.m`-Dateien)
+## Anhang C: Funktions-Index V1.0 + Addendum
 
 Alphabetisch sortiert. Diese Liste enthält NUR die Funktionen, die im Workflow-Text dieser MD referenziert werden — sie ist keine vollständige Inventur des Repos (`SSMtool/SSMtool/` enthält insgesamt ~189 `function`-Definitionen, die meisten als GUI-Callbacks und triviale Helfer).
 
@@ -1105,8 +1647,8 @@ Alphabetisch sortiert. Diese Liste enthält NUR die Funktionen, die im Workflow-
 | `compute_subspace.m` | `SSMtool/SSMtool/` | Eigendecomposition + Master-Subraum-Auswahl + Stabilitäts-Abbruch (`~conservative`-Branch) |
 | `cumsumall.m` + `.cpp` + `.mexw32` | `SSMtool/SSMtool/` | MEX-File für schnelle cumulative-sum auf Integer-Arrays (intern in `combinator.m`) |
 | `ex_beam_W0_3_W1_0.m` | `SSMtool/Addendum_Isolas/example_beam/` | Bernoulli-Beam-Beispiel: Forced Response Order $\le 3$ + Isolas |
-| `ex_SP_W0_3_W1_0.m` | `SSMtool/Addendum_Isolas/example_shawpierre/` | Shaw-Pierre Forced Response, Polynom-Ordnung 3 |
-| `ex_SP_W0_5_W1_5.m` | `SSMtool/Addendum_Isolas/example_shawpierre/` | Shaw-Pierre Forced Response, Polynom-Ordnung 5 |
+| `ex_SP_W0_3_W1_0.m` | `SSMtool/Addendum_Isolas/example_SP/` | Shaw-Pierre Forced Response, Polynom-Ordnung 3 |
+| `ex_SP_W0_5_W1_5.m` | `SSMtool/Addendum_Isolas/example_SP/` | Shaw-Pierre Forced Response, Polynom-Ordnung 5 |
 | `genlexd.m` | `SSMtool/Addendum_Isolas/core/` | Lexikographische Generierung von Multi-Index-Tupeln |
 | `int_dyn.m` | `SSMtool/SSMtool/` | Integration des vollen Systems via `ode15s` |
 | `int_dyn_em.m` | `SSMtool/SSMtool/` | Wie `int_dyn.m`, mit Interpolation auf gleichmäßiges Gitter (Error-Measurement) |
@@ -1121,9 +1663,9 @@ Alphabetisch sortiert. Diese Liste enthält NUR die Funktionen, die im Workflow-
 | `man2cor_ab.m` | `SSMtool/Addendum_Isolas/core/` | $a$-$b$-Variante von `man2cor.m` |
 | `matGV2.m` | `SSMtool/SSMtool/` | Liest die symbolische Nichtlinearität, baut für jede Ordnung die Sparse-Matrix $G_i \in \mathbb{R}^{2n \times (2n)^i}$ in modaler Basis |
 | `measure_inv_autonomous.m` | `SSMtool/SSMtool/` | Berechnet den Invarianz-Fehler $\delta_{\text{inv}}$; erzeugt `system_function.m` via `matlabFunction` |
-| `mech_sys_isola.m` | `SSMtool/Addendum_Isolas/core/` | Mechanisches System für Isolas-Detektion |
-| `mech_sys_isola_dx.m` | `SSMtool/Addendum_Isolas/core/` | Räumliche Ableitung für Isolas-Continuation |
-| `mech_sys_isola_dp.m` | `SSMtool/Addendum_Isolas/core/` | Parameter-Ableitung für Isolas-Continuation |
+| `mech_sys_isola.m` | auto-generiert (Addendum-Lauf) | Mechanisches System für Isolas-Detektion |
+| `mech_sys_isola_dx.m` | auto-generiert (Addendum-Lauf) | Räumliche Ableitung für Isolas-Continuation |
+| `mech_sys_isola_dp.m` | auto-generiert (Addendum-Lauf) | Parameter-Ableitung für Isolas-Continuation |
 | `nch.m` | `SSMtool/Addendum_Isolas/core/` | $n$-choose-$k$-Helfer |
 | `nkron.m` | `SSMtool/SSMtool/` | $n$-faches Kronecker-Produkt einer einzigen Matrix mit sich selbst |
 | `nsumk.m` | `SSMtool/SSMtool/` | Liefert alle nicht-negativen $n$-Tupel, die zu $k$ summieren |
@@ -1148,6 +1690,25 @@ Alphabetisch sortiert. Diese Liste enthält NUR die Funktionen, die im Workflow-
 | `sym2char.m` | `SSMtool/SSMtool/` | Symbolische/numerische Matrix → MATLAB-String `[a,b;c,d]` |
 | `system_function.m` | `SSMtool/SSMtool/` | Auto-generiert von `measure_inv_autonomous.m:59-60` via `matlabFunction(dyn_sys, 'file', 'system_function', 'Vars', [spv])`; Variablenanzahl = `numel(spv)` |
 | `updatewaitbar.m` | `SSMtool/SSMtool/` | Updatet Progress-Bar |
+
+Hinweis: Die Addendum-Beispiele liegen in `Addendum_Isolas/example_SP/` (im Repo verifiziert); `mech_sys_isola*.m` liegen nicht im Repo, sie werden zur Laufzeit auto-generiert (siehe Abschnitt 20.3).
+
+## Anhang D: Ausbaureihenfolge der 2.6-Dokumentation
+
+Beim weiteren Ausbau in genau dieser Reihenfolge vorgehen:
+
+1. `DynamicalSystem` vollständig dokumentieren
+2. `Manifold.choose_E` und Resonanzanalyse vollständig dokumentieren
+3. `compute_whisker` ordnungsweise dokumentieren
+4. `compute_perturbed_whisker` und Fourier-/Kappa-Struktur dokumentieren
+5. `extract_backbone`
+6. `extract_FRC` mit den drei Methoden
+7. `extract_FRS`
+8. `extract_ridges_trenches`
+9. `extract_Stability_Diagram`
+10. danach erst Beispielverzeichnisse im Detail
+
+Das ist der echte Kern des neuen Repos.
 
 ---
 
